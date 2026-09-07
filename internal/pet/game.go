@@ -378,6 +378,11 @@ func (g *Game) hidden() bool {
 	return !g.cfg.ShowsPet(len(g.showing) > 0, g.menu != nil)
 }
 
+// petOpacity is how solid to draw the pet right now.
+func (g *Game) petOpacity() float64 {
+	return g.cfg.PetOpacity(len(g.showing) > 0, g.menu != nil)
+}
+
 // activePanel is the balloon stack or menu currently sitting above the pet.
 func (g *Game) activePanel() layout.Panel {
 	switch {

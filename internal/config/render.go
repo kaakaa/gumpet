@@ -62,8 +62,13 @@ pet:
 
 behavior:
   # always     - the pet is always on screen
+  # faded      - the pet stays on screen but goes faint when it has nothing
+  #              to say, so it is there without being in the way
   # on-message - the pet appears only while a message is up
   mode: {{ .Behavior.Mode }}
+  # How solid the pet is in "faded" mode while idle: 1 is fully opaque, and
+  # lower is fainter. It is drawn in full whenever it has something to say.
+  idle_opacity: {{ n .Behavior.IdleOpacity }}
   # How the pet gets around the stage.
   #   none       - stands still
   #   horizontal - walks back and forth along the floor

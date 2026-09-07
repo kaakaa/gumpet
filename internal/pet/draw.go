@@ -84,6 +84,8 @@ func (g *Game) drawPet(screen *ebiten.Image) {
 	frame := frames[g.frameIdx%len(frames)]
 
 	op := &ebiten.DrawImageOptions{Filter: ebiten.FilterLinear}
+	// In "faded" mode an idle pet is drawn faint rather than not at all.
+	op.ColorScale.ScaleAlpha(float32(g.petOpacity()))
 	if g.walker.FacingRight() && g.cfg.Pet.FlipWhenFacingRight {
 		op.GeoM.Scale(-1, 1)
 		op.GeoM.Translate(float64(frame.Image.Bounds().Dx()), 0)

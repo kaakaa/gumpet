@@ -293,8 +293,18 @@
         <label for="mode">When to show the pet</label>
         <select id="mode" data-path="behavior.mode">
           <option value="always">Always on screen</option>
+          <option value="faded">On screen, but faded when idle</option>
           <option value="on-message">Only while a message is up</option>
         </select>
+      </div>
+      <div class="row">
+        <label for="idle-opacity">Faded to</label>
+        <input type="number" id="idle-opacity" data-path="behavior.idle_opacity" data-kind="float" min="0.05" max="1" step="0.05" data-faded-only>
+        <p class="hint">
+          How solid the pet is while it has nothing to say: 1 is fully opaque,
+          0.35 is a faint outline. It goes back to full whenever it speaks or
+          you open its menu.
+        </p>
       </div>
       <div class="row">
         <label for="roam">How it gets around</label>
@@ -510,6 +520,10 @@
     document.querySelectorAll("[data-custom-only]").forEach(function (el) {
       el.disabled = fullscreen || !custom;
     });
+    var faded = $("mode").value === "faded";
+    document.querySelectorAll("[data-faded-only]").forEach(function (el) {
+      el.disabled = !faded;
+    });
   }
 
   // changes returns only the settings whose value differs from the ones this
@@ -633,6 +647,7 @@
   });
   $("anchor").addEventListener("change", syncEnabled);
   $("fullscreen").addEventListener("change", syncEnabled);
+  $("mode").addEventListener("change", syncEnabled);
 
   load();
 })();

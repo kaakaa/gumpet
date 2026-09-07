@@ -23,7 +23,7 @@ func TestRenderRoundTrips(t *testing.T) {
 				Window:   Window{AlwaysOnTop: false, ClickThrough: false, SkipTaskbar: false},
 				Stage:    Stage{Fullscreen: true, Width: 800, Height: 600, Anchor: AnchorCustom, MarginX: 1, MarginY: 2, X: 30, Y: 40},
 				Pet:      Pet{Source: "/tmp/cat.gif", Scale: 0.75, FPS: 12.5, FlipWhenFacingRight: false},
-				Behavior: Behavior{Mode: ModeOnMessage, Roam: RoamWander, Speed: 0},
+				Behavior: Behavior{Mode: ModeOnMessage, IdleOpacity: 0.2, Roam: RoamWander, Speed: 0},
 				Message:  Message{DurationSec: 12.25, MaxVisible: 1, MaxWidth: 300, MaxQueue: 3, TextScale: 1.5},
 				History:  History{Max: 10, Hours: 0.5},
 			},
@@ -158,6 +158,9 @@ func TestValidateRejectsBadValues(t *testing.T) {
 		{"negative scale", func(c *Config) { c.Pet.Scale = -1 }},
 		{"zero fps", func(c *Config) { c.Pet.FPS = 0 }},
 		{"unknown mode", func(c *Config) { c.Behavior.Mode = "sometimes" }},
+		{"zero idle opacity", func(c *Config) { c.Behavior.IdleOpacity = 0 }},
+		{"negative idle opacity", func(c *Config) { c.Behavior.IdleOpacity = -0.5 }},
+		{"idle opacity above 1", func(c *Config) { c.Behavior.IdleOpacity = 1.5 }},
 		{"unknown roam", func(c *Config) { c.Behavior.Roam = "sideways" }},
 		{"zero balloon width", func(c *Config) { c.Message.MaxWidth = 0 }},
 		{"negative speed", func(c *Config) { c.Behavior.Speed = -1 }},
@@ -216,6 +219,8 @@ func TestShowsPet(t *testing.T) {
 		{"on-message, with a message", ModeOnMessage, true, false, true},
 		{"on-message, menu open", ModeOnMessage, false, true, true},
 		{"on-message, message just expired", ModeOnMessage, false, false, false},
+		{"faded, nothing happening", ModeFaded, false, false, true},
+		{"faded, with a message", ModeFaded, true, false, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -234,5 +239,42 @@ func TestHistoryRetention(t *testing.T) {
 	}
 	if got := (History{Hours: 0}).Retention(); got != 0 {
 		t.Errorf("Retention = %v, want 0 for no time limit", got)
+	}
+}
+
+func TestPetOpacity(t *testing.T) {
+	tests := []struct {
+		name       string
+		mode       Mode
+		idle       float64
+		hasMessage bool
+		menuOpen   bool
+		want       float64
+	}{
+		{"always is never faded", ModeAlways, 0.3, false, false, 1},
+		{"on-message is drawn in full when it is drawn at all", ModeOnMessage, 0.3, true, false, 1},
+		{"faded and idle", ModeFaded, 0.3, false, false, 0.3},
+		{"faded but talking", ModeFaded, 0.3, true, false, 1},
+		{"faded but showing its menu", ModeFaded, 0.3, false, true, 1},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := Default()
+			cfg.Behavior.Mode = tt.mode
+			cfg.Behavior.IdleOpacity = tt.idle
+			if got := cfg.PetOpacity(tt.hasMessage, tt.menuOpen); got != tt.want {
+				t.Errorf("PetOpacity(%v, %v) = %v, want %v", tt.hasMessage, tt.menuOpen, got, tt.want)
+			}
+		})
+	}
+}
+
+// A faded pet is still on screen, so it stays clickable and its menu still
+// opens. Only on-message mode takes it away.
+func TestFadedPetIsStillShown(t *testing.T) {
+	cfg := Default()
+	cfg.Behavior.Mode = ModeFaded
+	if !cfg.ShowsPet(false, false) {
+		t.Error("a faded pet is not drawn at all")
 	}
 }

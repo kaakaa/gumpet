@@ -125,7 +125,8 @@ the file, comments and all. The settings worth knowing about:
 | `stage.fullscreen` | `false` | Let the pet roam the whole monitor |
 | `stage.width` / `stage.height` | 520 × 360 | Otherwise, how big a patch of screen it keeps to |
 | `stage.anchor` | `bottom-right` | Which corner that patch sits in — or `custom` with `stage.x` / `stage.y` |
-| `behavior.mode` | `always` | `on-message` hides the pet until something arrives |
+| `behavior.mode` | `always` | `faded` dims the pet when idle, `on-message` hides it until something arrives |
+| `behavior.idle_opacity` | 0.35 | How solid a `faded` pet is when it has nothing to say |
 | `behavior.roam` | `horizontal` | `none`, `horizontal`, `perimeter` or `wander` — see below |
 | `behavior.speed` | 45 | Walking speed, pixels per second |
 | `pet.source` | *(built-in gopher)* | Your own artwork — see below |
@@ -159,6 +160,19 @@ gumpet's window is only as big as the pet and whatever it is saying, and it
 moves around the screen to follow the pet — so `stage.fullscreen: true` lets the
 pet cross the whole display without a screen-sized rectangle sitting over your
 desktop.
+
+## Between messages
+
+`behavior.mode` decides what the pet does with itself when it has nothing to say:
+
+| | |
+| ------------ | --- |
+| `always` | Stays on screen as it is. |
+| `faded` | Stays on screen but goes faint, at `behavior.idle_opacity`. It comes back to full whenever it speaks or you open its menu, so it is still there to click. |
+| `on-message` | Disappears. The window turns click-through while it is gone, so an invisible pet never swallows a click. |
+
+`idle_opacity` runs from just above 0 to 1. Around 0.35 leaves a clear gopher
+you can still read straight through; much below 0.2 and it is barely there.
 
 ## Messages
 

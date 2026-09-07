@@ -106,15 +106,11 @@ func (g *Game) buildMenu() *menu {
 			},
 		},
 		menuItem{
-			label:  "Hide until a message",
-			detail: onOff(cfg.Behavior.Mode == config.ModeOnMessage),
+			label:  "When idle",
+			detail: idleLabel(cfg.Behavior.Mode),
 			action: func() error {
 				return g.store.Update(func(c *config.Config) {
-					if c.Behavior.Mode == config.ModeOnMessage {
-						c.Behavior.Mode = config.ModeAlways
-					} else {
-						c.Behavior.Mode = config.ModeOnMessage
-					}
+					c.Behavior.Mode = nextMode(c.Behavior.Mode)
 				})
 			},
 		},
@@ -250,6 +246,27 @@ func (g *Game) overPet(px, py float64) bool {
 
 func (g *Game) overWindow(px, py float64) bool {
 	return px >= 0 && py >= 0 && px < g.win.W && py < g.win.H
+}
+
+// idleLabel says what the pet does with itself between messages.
+func idleLabel(m config.Mode) string {
+	switch m {
+	case config.ModeFaded:
+		return "fade"
+	case config.ModeOnMessage:
+		return "hide"
+	default:
+		return "stay"
+	}
+}
+
+func nextMode(m config.Mode) config.Mode {
+	for i, candidate := range config.Modes {
+		if candidate == m {
+			return config.Modes[(i+1)%len(config.Modes)]
+		}
+	}
+	return config.ModeAlways
 }
 
 func nextRoam(r config.Roam) config.Roam {

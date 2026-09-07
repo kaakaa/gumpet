@@ -74,9 +74,15 @@ type Mode string
 const (
 	// ModeAlways keeps the pet on screen all the time.
 	ModeAlways Mode = "always"
+	// ModeFaded keeps the pet on screen but faint until it has something to
+	// say, so it stays out of the way without disappearing.
+	ModeFaded Mode = "faded"
 	// ModeOnMessage shows the pet only while a message is being displayed.
 	ModeOnMessage Mode = "on-message"
 )
+
+// Modes lists every visibility mode, in the order the settings page shows them.
+var Modes = []Mode{ModeAlways, ModeFaded, ModeOnMessage}
 
 // Config is the whole of gumpet's settings.
 type Config struct {
@@ -145,6 +151,9 @@ type Pet struct {
 // Behavior is how the pet acts between messages.
 type Behavior struct {
 	Mode Mode `yaml:"mode" json:"mode"`
+	// IdleOpacity is how solid the pet is drawn in "faded" mode when it has
+	// nothing to say: 1 is fully opaque, and lower is fainter.
+	IdleOpacity float64 `yaml:"idle_opacity" json:"idle_opacity"`
 	// Roam is how the pet moves around the stage.
 	Roam Roam `yaml:"roam" json:"roam"`
 	// Speed is the walking speed in pixels per second.
@@ -213,9 +222,10 @@ func Default() Config {
 			FlipWhenFacingRight: true,
 		},
 		Behavior: Behavior{
-			Mode:  ModeAlways,
-			Roam:  RoamHorizontal,
-			Speed: 45,
+			Mode:        ModeAlways,
+			IdleOpacity: 0.35,
+			Roam:        RoamHorizontal,
+			Speed:       45,
 		},
 		Message: Message{
 			DurationSec: 8,
@@ -231,14 +241,24 @@ func Default() Config {
 	}
 }
 
-// ShowsPet reports whether the pet should be on screen, given whether it has
-// something to say and whether its menu is open. In "on-message" mode the pet
-// is drawn only when one of those is true.
+// ShowsPet reports whether the pet should be drawn at all, given whether it has
+// something to say and whether its menu is open. Only "on-message" mode takes
+// it off the screen entirely.
 func (c Config) ShowsPet(hasMessage, menuOpen bool) bool {
 	if c.Behavior.Mode != ModeOnMessage {
 		return true
 	}
 	return hasMessage || menuOpen
+}
+
+// PetOpacity is how solid to draw the pet: 1 normally, and the configured idle
+// opacity in "faded" mode while there is nothing going on. A pet that is saying
+// something, or showing its menu, is always drawn in full.
+func (c Config) PetOpacity(hasMessage, menuOpen bool) float64 {
+	if c.Behavior.Mode != ModeFaded || hasMessage || menuOpen {
+		return 1
+	}
+	return c.Behavior.IdleOpacity
 }
 
 // Validate reports the first setting that gumpet cannot work with. Its messages
@@ -259,10 +279,11 @@ func (c Config) Validate() error {
 	if c.Pet.FPS <= 0 {
 		return fmt.Errorf("pet.fps must be positive, got %v", c.Pet.FPS)
 	}
-	switch c.Behavior.Mode {
-	case ModeAlways, ModeOnMessage:
-	default:
-		return fmt.Errorf("behavior.mode %q is not one of always, on-message", c.Behavior.Mode)
+	if !validMode(c.Behavior.Mode) {
+		return fmt.Errorf("behavior.mode %q is not one of always, faded, on-message", c.Behavior.Mode)
+	}
+	if c.Behavior.IdleOpacity <= 0 || c.Behavior.IdleOpacity > 1 {
+		return fmt.Errorf("behavior.idle_opacity must be above 0 and at most 1, got %v", c.Behavior.IdleOpacity)
 	}
 	if !validRoam(c.Behavior.Roam) {
 		return fmt.Errorf("behavior.roam %q is not one of none, horizontal, perimeter, wander", c.Behavior.Roam)
@@ -297,6 +318,15 @@ func (c Config) Validate() error {
 func validAnchor(a Anchor) bool {
 	for _, valid := range Anchors {
 		if a == valid {
+			return true
+		}
+	}
+	return false
+}
+
+func validMode(m Mode) bool {
+	for _, valid := range Modes {
+		if m == valid {
 			return true
 		}
 	}
