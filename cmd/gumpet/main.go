@@ -13,6 +13,7 @@ import (
 	"github.com/hajimehoshi/ebiten/v2"
 
 	"github.com/kaakaa/gumpet/internal/config"
+	"github.com/kaakaa/gumpet/internal/history"
 	"github.com/kaakaa/gumpet/internal/message"
 	"github.com/kaakaa/gumpet/internal/pet"
 	"github.com/kaakaa/gumpet/internal/petpack"
@@ -81,8 +82,9 @@ func run() error {
 	defer stop()
 
 	store := settings.New(cfg, *configPath)
+	hist := history.New(cfg.History)
 	inbox := make(chan message.Message, inboxSize)
-	srv := server.New(store, inbox, log)
+	srv := server.New(store, hist, inbox, log)
 	served := make(chan error, 1)
 	go func() { served <- srv.Serve(ctx) }()
 
@@ -91,6 +93,7 @@ func run() error {
 		Store:   store,
 		Pack:    pack,
 		Inbox:   inbox,
+		History: hist,
 		Quit:    ctx.Done(),
 		Log:     log,
 		Version: version,

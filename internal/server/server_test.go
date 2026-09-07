@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/kaakaa/gumpet/internal/config"
+	"github.com/kaakaa/gumpet/internal/history"
 	"github.com/kaakaa/gumpet/internal/message"
 	"github.com/kaakaa/gumpet/internal/settings"
 )
@@ -30,7 +31,8 @@ func newTestServerWithConfig(t *testing.T, cfg config.Config, buffer int) (*Serv
 	out := make(chan message.Message, buffer)
 	store := settings.New(cfg, filepath.Join(t.TempDir(), "config.yaml"))
 	updates := store.Subscribe(4)
-	return New(store, out, slog.New(slog.DiscardHandler)), out, updates
+	srv := New(store, history.New(cfg.History), out, slog.New(slog.DiscardHandler))
+	return srv, out, updates
 }
 
 func do(t *testing.T, s *Server, method, path, contentType, body string, headers map[string]string) *httptest.ResponseRecorder {
@@ -319,7 +321,7 @@ func TestTheSettingsPageSeesAChangeMadeElsewhere(t *testing.T) {
 	cfg := config.Default()
 	out := make(chan message.Message, 1)
 	store := settings.New(cfg, filepath.Join(t.TempDir(), "config.yaml"))
-	s := New(store, out, slog.New(slog.DiscardHandler))
+	s := New(store, history.New(cfg.History), out, slog.New(slog.DiscardHandler))
 
 	// Stand in for the pet's menu flipping a toggle.
 	if err := store.Update(func(c *config.Config) { c.Behavior.Roam = config.RoamPerimeter }); err != nil {
@@ -344,7 +346,7 @@ func TestTheSettingsPageSeesAChangeMadeElsewhere(t *testing.T) {
 func TestAPartialSaveDoesNotUndoAChangeMadeElsewhere(t *testing.T) {
 	out := make(chan message.Message, 1)
 	store := settings.New(config.Default(), filepath.Join(t.TempDir(), "config.yaml"))
-	s := New(store, out, slog.New(slog.DiscardHandler))
+	s := New(store, history.New(config.Default().History), out, slog.New(slog.DiscardHandler))
 
 	// The pet's menu turns on "hide until a message" after the page loaded.
 	if err := store.Update(func(c *config.Config) { c.Behavior.Mode = config.ModeOnMessage }); err != nil {
@@ -372,5 +374,135 @@ func TestAPartialSaveDoesNotUndoAChangeMadeElsewhere(t *testing.T) {
 	}
 	if saved.Behavior.Mode != config.ModeOnMessage {
 		t.Errorf("the file says mode %q, want on-message", saved.Behavior.Mode)
+	}
+}
+
+func TestMessagesAreRecordedAsTheyArrive(t *testing.T) {
+	s, out := newTestServer(t, config.Server{Addr: "127.0.0.1:0"}, 4)
+
+	for _, text := range []string{"first", "second"} {
+		if rec := post(t, s, "text/plain", text, nil); rec.Code != http.StatusAccepted {
+			t.Fatalf("%q: status = %d", text, rec.Code)
+		}
+	}
+
+	rec := do(t, s, http.MethodGet, "/api/v1/messages", "", "", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	var body struct {
+		Messages []history.Record `json:"messages"`
+		History  config.History   `json:"history"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+
+	if len(body.Messages) != 2 {
+		t.Fatalf("got %d messages, want 2", len(body.Messages))
+	}
+	if body.Messages[0].Text != "second" {
+		t.Errorf("first listed is %q, want the newest %q", body.Messages[0].Text, "second")
+	}
+	for _, m := range body.Messages {
+		if m.Shown() {
+			t.Errorf("%q is marked shown, but the pet has not run", m.Text)
+		}
+	}
+	if body.History.Max != config.Default().History.Max {
+		t.Errorf("history limits = %+v, want the configured ones", body.History)
+	}
+
+	// The message handed to the pet carries the ID it reports back.
+	first := <-out
+	if first.ID == "" {
+		t.Error("the pet was given a message with no ID, so it cannot be marked shown")
+	}
+}
+
+func TestARecordedMessageIsMarkedShown(t *testing.T) {
+	out := make(chan message.Message, 4)
+	cfg := config.Default()
+	store := settings.New(cfg, filepath.Join(t.TempDir(), "config.yaml"))
+	hist := history.New(cfg.History)
+	s := New(store, hist, out, slog.New(slog.DiscardHandler))
+
+	post(t, s, "text/plain", "hello", nil)
+
+	// Stand in for the pet putting it on screen.
+	hist.MarkShown((<-out).ID)
+
+	rec := do(t, s, http.MethodGet, "/api/v1/messages", "", "", nil)
+	var body struct {
+		Messages []history.Record `json:"messages"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if !body.Messages[0].Shown() {
+		t.Error("the message is still listed as waiting")
+	}
+}
+
+// A message that arrives with nowhere to go is still worth listing: it is the
+// only sign the user gets that gumpet took it and the pet did not.
+func TestAMessageIsRecordedEvenWhenThePetCannotTakeIt(t *testing.T) {
+	s, _ := newTestServer(t, config.Server{Addr: "127.0.0.1:0"}, 0)
+
+	if rec := post(t, s, "text/plain", "nobody home", nil); rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusServiceUnavailable)
+	}
+
+	rec := do(t, s, http.MethodGet, "/api/v1/messages", "", "", nil)
+	var body struct {
+		Messages []history.Record `json:"messages"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(body.Messages) != 1 || body.Messages[0].Shown() {
+		t.Errorf("messages = %+v, want one, still waiting", body.Messages)
+	}
+}
+
+func TestSavingHistoryLimitsPrunesStraightAway(t *testing.T) {
+	out := make(chan message.Message, 8)
+	cfg := config.Default()
+	store := settings.New(cfg, filepath.Join(t.TempDir(), "config.yaml"))
+	hist := history.New(cfg.History)
+	s := New(store, hist, out, slog.New(slog.DiscardHandler))
+
+	for range 5 {
+		post(t, s, "text/plain", "hello", nil)
+	}
+
+	rec := do(t, s, http.MethodPut, "/api/v1/config", "application/json", `{"history":{"max":2}}`, nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d (%s)", rec.Code, http.StatusOK, rec.Body)
+	}
+	if got := hist.Len(); got != 2 {
+		t.Errorf("kept %d messages, want the new limit of 2", got)
+	}
+}
+
+func TestMessagesPageIsServed(t *testing.T) {
+	s, _ := newTestServer(t, config.Server{Addr: "127.0.0.1:0"}, 1)
+
+	rec := do(t, s, http.MethodGet, "/messages", "", "", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if ct := rec.Header().Get("Content-Type"); !strings.HasPrefix(ct, "text/html") {
+		t.Errorf("Content-Type = %q, want HTML", ct)
+	}
+}
+
+func TestListingMessagesRequiresTheToken(t *testing.T) {
+	cfg := config.Default()
+	cfg.Server.Token = "s3cret"
+	s, _, _ := newTestServerWithConfig(t, cfg, 1)
+
+	if rec := do(t, s, http.MethodGet, "/api/v1/messages", "", "", nil); rec.Code != http.StatusUnauthorized {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusUnauthorized)
 	}
 }

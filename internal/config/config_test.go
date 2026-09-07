@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -23,7 +24,8 @@ func TestRenderRoundTrips(t *testing.T) {
 				Stage:    Stage{Fullscreen: true, Width: 800, Height: 600, Anchor: AnchorCustom, MarginX: 1, MarginY: 2, X: 30, Y: 40},
 				Pet:      Pet{Source: "/tmp/cat.gif", Scale: 0.75, FPS: 12.5, FlipWhenFacingRight: false},
 				Behavior: Behavior{Mode: ModeOnMessage, Roam: RoamWander, Speed: 0},
-				Message:  Message{DurationSec: 12.25, MaxWidth: 300, MaxQueue: 3, TextScale: 1.5},
+				Message:  Message{DurationSec: 12.25, MaxVisible: 1, MaxWidth: 300, MaxQueue: 3, TextScale: 1.5},
+				History:  History{Max: 10, Hours: 0.5},
 			},
 		},
 		{
@@ -162,6 +164,9 @@ func TestValidateRejectsBadValues(t *testing.T) {
 		{"zero duration", func(c *Config) { c.Message.DurationSec = 0 }},
 		{"zero queue", func(c *Config) { c.Message.MaxQueue = 0 }},
 		{"zero text scale", func(c *Config) { c.Message.TextScale = 0 }},
+		{"zero visible balloons", func(c *Config) { c.Message.MaxVisible = 0 }},
+		{"zero history", func(c *Config) { c.History.Max = 0 }},
+		{"negative retention", func(c *Config) { c.History.Hours = -1 }},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -220,5 +225,14 @@ func TestShowsPet(t *testing.T) {
 				t.Errorf("ShowsPet(%v, %v) = %v, want %v", tt.hasMessage, tt.menuOpen, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestHistoryRetention(t *testing.T) {
+	if got := (History{Hours: 1.5}).Retention(); got != 90*time.Minute {
+		t.Errorf("Retention = %v, want 90m", got)
+	}
+	if got := (History{Hours: 0}).Retention(); got != 0 {
+		t.Errorf("Retention = %v, want 0 for no time limit", got)
 	}
 }

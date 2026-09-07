@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/kaakaa/gumpet/internal/config"
+	"github.com/kaakaa/gumpet/internal/history"
 	"github.com/kaakaa/gumpet/internal/message"
 	"github.com/kaakaa/gumpet/internal/petsrc"
 	"github.com/kaakaa/gumpet/internal/settings"
@@ -34,8 +35,10 @@ type Server struct {
 	// store is shared with the pet, so a change made from its menu shows up on
 	// the settings page and the other way round.
 	store *settings.Store
-	out   chan<- message.Message
-	log   *slog.Logger
+	// history records every message, and whether the pet has said it yet.
+	history *history.Store
+	out     chan<- message.Message
+	log     *slog.Logger
 
 	server *http.Server
 	// addr is fixed when Serve binds, so that editing server.addr cannot leave
@@ -50,14 +53,16 @@ type messageRequest struct {
 	DurationSec float64 `json:"duration_sec"`
 }
 
-// New builds a server that publishes received messages to out and saves
-// settings through store.
-func New(store *settings.Store, out chan<- message.Message, log *slog.Logger) *Server {
-	s := &Server{store: store, out: out, log: log, addr: store.Get().Server.Addr}
+// New builds a server that publishes received messages to out, records them in
+// hist, and saves settings through store.
+func New(store *settings.Store, hist *history.Store, out chan<- message.Message, log *slog.Logger) *Server {
+	s := &Server{store: store, history: hist, out: out, log: log, addr: store.Get().Server.Addr}
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /{$}", s.handleSettingsPage)
+	mux.HandleFunc("GET /{$}", s.page("ui/settings.html"))
+	mux.HandleFunc("GET /messages", s.page("ui/messages.html"))
 	mux.HandleFunc("POST /api/v1/messages", s.authed(s.handleMessage))
+	mux.HandleFunc("GET /api/v1/messages", s.authed(s.handleListMessages))
 	mux.HandleFunc("GET /api/v1/config", s.authed(s.handleGetConfig))
 	mux.HandleFunc("PUT /api/v1/config", s.authed(s.handlePutConfig))
 	mux.HandleFunc("GET /api/v1/healthz", s.handleHealth)
@@ -100,20 +105,36 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
-// handleSettingsPage serves the page itself without a token. It holds no
-// settings of its own — it asks the API for those, and the API is what checks
-// the token.
-func (s *Server) handleSettingsPage(w http.ResponseWriter, r *http.Request) {
-	page, err := ui.ReadFile("ui/settings.html")
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "settings page is missing from this build")
-		return
+// page serves one of the bundled pages, without a token. The pages hold no
+// data of their own — they ask the API for it, and the API is what checks the
+// token.
+func (s *Server) page(name string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		body, err := ui.ReadFile(name)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "page is missing from this build")
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		// The pages are self-contained, so nothing may be loaded from anywhere
+		// else.
+		w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; form-action 'none'")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		_, _ = w.Write(body)
 	}
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	// The page is self-contained, so nothing may be loaded from anywhere else.
-	w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; form-action 'none'")
-	w.Header().Set("X-Content-Type-Options", "nosniff")
-	_, _ = w.Write(page)
+}
+
+// handleListMessages is what the messages page reads: everything gumpet has
+// been sent that is still within the retention settings, newest first.
+func (s *Server) handleListMessages(w http.ResponseWriter, r *http.Request) {
+	records := s.history.List()
+	if records == nil {
+		records = []history.Record{}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"messages": records,
+		"history":  s.config().History,
+	})
 }
 
 func (s *Server) handleGetConfig(w http.ResponseWriter, r *http.Request) {
@@ -157,6 +178,7 @@ func (s *Server) handlePutConfig(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	s.history.SetLimits(cfg.History)
 	s.log.Info("saved settings", "path", s.store.Path())
 
 	writeJSON(w, http.StatusOK, map[string]any{"config": cfg, "path": s.store.Path()})
@@ -191,13 +213,15 @@ func (s *Server) handleMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	msg := message.Message{
-		Text:     req.Text,
-		Duration: time.Duration(req.DurationSec * float64(time.Second)),
-	}
+	duration := time.Duration(req.DurationSec * float64(time.Second))
+	// Record it before handing it over, so that a message the pet never gets
+	// round to showing still appears on the messages page as pending.
+	rec := s.history.Add(req.Text, duration)
+
+	msg := message.Message{ID: rec.ID, Text: req.Text, Duration: duration}
 	select {
 	case s.out <- msg:
-		writeJSON(w, http.StatusAccepted, map[string]string{"status": "accepted"})
+		writeJSON(w, http.StatusAccepted, map[string]string{"status": "accepted", "id": rec.ID})
 	default:
 		// The pet drains this channel every frame, so a full buffer means it is
 		// not running rather than merely busy.

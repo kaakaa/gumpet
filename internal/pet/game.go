@@ -18,6 +18,7 @@ import (
 	"github.com/hajimehoshi/ebiten/v2/text/v2"
 
 	"github.com/kaakaa/gumpet/internal/config"
+	"github.com/kaakaa/gumpet/internal/history"
 	"github.com/kaakaa/gumpet/internal/layout"
 	"github.com/kaakaa/gumpet/internal/message"
 	"github.com/kaakaa/gumpet/internal/petpack"
@@ -36,10 +37,20 @@ type Options struct {
 	Pack  *petpack.Pack
 	// Inbox carries messages to display, in the order they arrive.
 	Inbox <-chan message.Message
+	// History is told when a message actually reaches the screen. It may be
+	// nil, in which case nothing is recorded.
+	History *history.Store
 	// Quit ends the game loop when it is closed.
 	Quit    <-chan struct{}
 	Log     *slog.Logger
 	Version string
+}
+
+// shown is a message currently on screen and how long it has left.
+type shown struct {
+	msg       message.Message
+	remaining time.Duration
+	balloon   *balloon
 }
 
 // Game is the Ebitengine game that is gumpet's pet.
@@ -50,6 +61,7 @@ type Game struct {
 	pack    *petpack.Pack
 	face    text.Face
 	inbox   <-chan message.Message
+	history *history.Store
 	quit    <-chan struct{}
 	log     *slog.Logger
 	version string
@@ -75,12 +87,15 @@ type Game struct {
 	frameIdx     int
 	frameElapsed time.Duration
 
-	current   *message.Message
-	remaining time.Duration
-	queue     []message.Message
-	// balloon is the current message, wrapped and measured. It is rebuilt only
-	// when the message or the settings change.
-	balloon *balloon
+	// showing is what is on screen right now, oldest first. The first one is
+	// the one the tail points at.
+	showing []shown
+	queue   []message.Message
+	// panel and placed are the stacked balloons, rebuilt only when what is on
+	// screen or the settings change.
+	panel      layout.Panel
+	placed     []layout.Point
+	panelDirty bool
 
 	menu *menu
 	// menuIdle is how long the cursor has been away from the window, which is
@@ -103,6 +118,7 @@ func New(o Options) *Game {
 		pack:        o.Pack,
 		face:        text.NewGoXFace(bitmapfont.FaceEA),
 		inbox:       o.Inbox,
+		history:     o.History,
 		quit:        o.Quit,
 		log:         o.Log,
 		version:     o.Version,
@@ -144,7 +160,7 @@ func (g *Game) Update() error {
 
 	g.drainUpdates()
 	g.drainInbox()
-	g.advanceMessage(dt)
+	g.advanceMessages(dt)
 	if err := g.handleInput(dt); err != nil {
 		return err
 	}
@@ -152,6 +168,7 @@ func (g *Game) Update() error {
 		g.walker.Step(dt)
 	}
 	g.advanceAnimation(dt)
+	g.rebuildPanel()
 	g.placeWindow()
 	return nil
 }
@@ -229,7 +246,7 @@ func (g *Game) applyConfig(cfg config.Config) {
 
 	ebiten.SetWindowFloating(cfg.Window.AlwaysOnTop)
 	g.reshapeWalker()
-	g.balloon = nil
+	g.panelDirty = true
 	if g.menu != nil {
 		g.menu = g.buildMenu()
 	}
@@ -257,29 +274,59 @@ func (g *Game) enqueue(msg message.Message) {
 	}
 }
 
-// advanceMessage expires the message on screen and promotes the next one.
-func (g *Game) advanceMessage(dt time.Duration) {
-	if g.current != nil {
-		g.remaining -= dt
-		if g.remaining > 0 {
-			return
+// advanceMessages ages out what is on screen and takes the next messages off
+// the queue, oldest first. Several can be up at once: a burst that arrives
+// together is shown together rather than made to queue politely.
+func (g *Game) advanceMessages(dt time.Duration) {
+	kept := g.showing[:0]
+	for _, s := range g.showing {
+		if s.remaining -= dt; s.remaining > 0 {
+			kept = append(kept, s)
 		}
-		g.current = nil
-		g.balloon = nil
+	}
+	if len(kept) != len(g.showing) {
+		g.panelDirty = true
+	}
+	g.showing = kept
+
+	for len(g.showing) < g.cfg.Message.MaxVisible && len(g.queue) > 0 {
+		msg := g.queue[0]
+		g.queue = g.queue[1:]
+
+		remaining := msg.Duration
+		if remaining <= 0 {
+			remaining = time.Duration(g.cfg.Message.DurationSec * float64(time.Second))
+		}
+		g.showing = append(g.showing, shown{msg: msg, remaining: remaining})
+		g.panelDirty = true
+
+		if g.history != nil && msg.ID != "" {
+			g.history.MarkShown(msg.ID)
+		}
+	}
+	if g.panelDirty {
 		g.resetAnimation()
 	}
-	if len(g.queue) == 0 {
+}
+
+// rebuildPanel lays the balloons out into one stack above the pet.
+func (g *Game) rebuildPanel() {
+	if !g.panelDirty {
 		return
 	}
-	msg := g.queue[0]
-	g.queue = g.queue[1:]
-	g.current = &msg
-	g.balloon = nil
-	g.remaining = msg.Duration
-	if g.remaining <= 0 {
-		g.remaining = time.Duration(g.cfg.Message.DurationSec * float64(time.Second))
+	g.panelDirty = false
+
+	if len(g.showing) == 0 {
+		g.panel, g.placed = layout.Panel{}, nil
+		return
 	}
-	g.resetAnimation()
+	sizes := make([]layout.Size, len(g.showing))
+	for i := range g.showing {
+		b := g.layoutBalloon(g.showing[i].msg.Text)
+		g.showing[i].balloon = b
+		sizes[i] = layout.Size{W: b.width, H: b.height}
+	}
+	g.panel, g.placed = layout.StackBalloons(sizes, balloonSideStep, balloonStackGap)
 }
 
 // advanceAnimation steps through the current animation. A pet that has stopped
@@ -316,7 +363,7 @@ func (g *Game) resetAnimation() {
 
 // frames is the animation to play right now.
 func (g *Game) frames() []petpack.Frame {
-	if g.current != nil {
+	if len(g.showing) > 0 {
 		return g.pack.TalkFrames()
 	}
 	return g.pack.Walk
@@ -328,28 +375,26 @@ func (g *Game) petHeight() float64 { return float64(g.pack.Size.Y) * g.cfg.Pet.S
 // hidden reports whether there is nothing to draw, which is how "on-message"
 // mode makes the pet disappear.
 func (g *Game) hidden() bool {
-	return !g.cfg.ShowsPet(g.current != nil, g.menu != nil)
+	return !g.cfg.ShowsPet(len(g.showing) > 0, g.menu != nil)
 }
 
-// panel is the balloon or menu currently sitting above the pet.
-func (g *Game) panel() layout.Panel {
+// activePanel is the balloon stack or menu currently sitting above the pet.
+func (g *Game) activePanel() layout.Panel {
 	switch {
 	case g.hidden():
 		return layout.Panel{}
 	case g.menu != nil:
 		return layout.Panel{W: g.menu.width, H: g.menu.height}
-	case g.current != nil:
-		b := g.currentBalloon()
-		return layout.Panel{W: b.width, H: b.height}
+	default:
+		return g.panel
 	}
-	return layout.Panel{}
 }
 
 // placeWindow sizes the window around the pet and its panel and moves it to
 // wherever the pet has walked to.
 func (g *Game) placeWindow() {
 	petX, petY := g.walker.Pos()
-	g.win = layout.PlaceWindow(petX, petY, g.petWidth(), g.petHeight(), g.panel(), panelGap, g.monitor)
+	g.win = layout.PlaceWindow(petX, petY, g.petWidth(), g.petHeight(), g.activePanel(), panelGap, g.monitor)
 
 	w, h := int(math.Ceil(g.win.W)), int(math.Ceil(g.win.H))
 	if w != g.winW || h != g.winH {

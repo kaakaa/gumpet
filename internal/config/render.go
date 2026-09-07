@@ -75,12 +75,23 @@ behavior:
 
 message:
   duration_sec: {{ n .Message.DurationSec }}
+  # How many balloons may be on screen at once. Messages that arrive together
+  # are shown together, up to this many.
+  max_visible: {{ .Message.MaxVisible }}
   # How wide the speech balloon may grow before the text wraps, in pixels.
   max_width: {{ .Message.MaxWidth }}
   # How many messages may wait their turn before the oldest are dropped.
   max_queue: {{ .Message.MaxQueue }}
   # Size of the message text relative to the font's own 12px.
   text_scale: {{ n .Message.TextScale }}
+
+# What the messages page remembers. The record is kept in memory, so it starts
+# empty every time gumpet runs.
+history:
+  # How many messages to keep, newest first.
+  max: {{ .History.Max }}
+  # How long to keep them, in hours. 0 keeps them until max is reached.
+  hours: {{ n .History.Hours }}
 `
 
 var tmpl = template.Must(template.New("config").Funcs(template.FuncMap{

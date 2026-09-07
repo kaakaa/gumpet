@@ -8,6 +8,8 @@ import (
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/text/v2"
 	"github.com/hajimehoshi/ebiten/v2/vector"
+
+	"github.com/kaakaa/gumpet/internal/layout"
 )
 
 // Balloon and menu geometry, in logical pixels.
@@ -17,6 +19,10 @@ const (
 	balloonStroke  = 2.0
 	tailWidth      = 16.0
 	tailHeight     = 10.0
+	// balloonSideStep and balloonStackGap set how a pile of balloons zigzags,
+	// so that several at once read as a crowd rather than a list.
+	balloonSideStep = 26.0
+	balloonStackGap = 5.0
 )
 
 var (
@@ -37,18 +43,14 @@ type balloon struct {
 	textW, textH  float64
 }
 
-// currentBalloon lays out the message on screen, reusing the last layout until
-// the message or the settings change.
-func (g *Game) currentBalloon() *balloon {
-	if g.balloon != nil {
-		return g.balloon
-	}
+// layoutBalloon wraps and measures one message.
+func (g *Game) layoutBalloon(text string) *balloon {
 	scale := g.cfg.Message.TextScale
 	// The balloon may not be wider than the monitor, whatever the setting says.
 	maxWidth := math.Min(float64(g.cfg.Message.MaxWidth), g.monitor.W)
 	maxText := math.Max(maxWidth-2*balloonPadding, 1)
 
-	lines := g.wrap(g.current.Text, maxText/scale)
+	lines := g.wrap(text, maxText/scale)
 	b := &balloon{
 		lines: lines,
 		textW: g.blockWidth(lines) * scale,
@@ -56,7 +58,6 @@ func (g *Game) currentBalloon() *balloon {
 	}
 	b.width = b.textW + 2*balloonPadding
 	b.height = b.textH + 2*balloonPadding
-	g.balloon = b
 	return b
 }
 
@@ -73,8 +74,8 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	switch {
 	case g.menu != nil:
 		g.drawMenu(screen)
-	case g.current != nil:
-		g.drawBalloon(screen)
+	case len(g.showing) > 0:
+		g.drawBalloons(screen)
 	}
 }
 
@@ -93,20 +94,41 @@ func (g *Game) drawPet(screen *ebiten.Image) {
 	screen.DrawImage(frame.Image, op)
 }
 
-func (g *Game) drawBalloon(screen *ebiten.Image) {
-	b := g.currentBalloon()
+// drawBalloons paints the stack. Only the bottom one gets a tail: several
+// tails converging on one pet looks like a mistake rather than a crowd.
+func (g *Game) drawBalloons(screen *ebiten.Image) {
 	ds := g.deviceScale
-	x, y := g.win.PanelX, g.win.PanelY
 
-	path := balloonPath(
-		float32(x*ds), float32(y*ds), float32(b.width*ds), float32(b.height*ds),
-		float32(balloonRadius*ds), float32(g.win.TailX*ds),
-		float32(tailWidth*ds), float32(tailHeight*ds),
-	)
-	fillAndStroke(screen, path, ds)
+	// Newest on top of older ones, so the most recent is never buried.
+	for i := len(g.showing) - 1; i >= 0; i-- {
+		b := g.showing[i].balloon
+		if b == nil || i >= len(g.placed) {
+			continue
+		}
+		x := g.win.PanelX + g.placed[i].X
+		y := g.win.PanelY + g.placed[i].Y
 
-	g.drawText(screen, b.lines, (x+balloonPadding)*ds, (y+balloonPadding)*ds,
-		g.cfg.Message.TextScale*ds, textColor)
+		var path *vector.Path
+		if i == 0 {
+			// Keep the tail on the balloon it belongs to, wherever the stack
+			// has ended up relative to the pet.
+			tailX := layout.Clamp(g.win.TailX, x, x+b.width)
+			path = balloonPath(
+				float32(x*ds), float32(y*ds), float32(b.width*ds), float32(b.height*ds),
+				float32(balloonRadius*ds), float32(tailX*ds),
+				float32(tailWidth*ds), float32(tailHeight*ds),
+			)
+		} else {
+			path = roundedRectPath(
+				float32(x*ds), float32(y*ds), float32(b.width*ds), float32(b.height*ds),
+				float32(balloonRadius*ds),
+			)
+		}
+		fillAndStroke(screen, path, ds)
+
+		g.drawText(screen, b.lines, (x+balloonPadding)*ds, (y+balloonPadding)*ds,
+			g.cfg.Message.TextScale*ds, textColor)
+	}
 }
 
 func (g *Game) drawMenu(screen *ebiten.Image) {

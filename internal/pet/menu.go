@@ -62,7 +62,12 @@ func (g *Game) buildMenu() *menu {
 			rule:   true,
 			closes: true,
 			action: func() error {
-				g.enqueue(message.Message{Text: "Hello! " + time.Now().Format("15:04:05")})
+				text := "Hello! " + time.Now().Format("15:04:05")
+				msg := message.Message{Text: text}
+				if g.history != nil {
+					msg.ID = g.history.Add(text, 0).ID
+				}
+				g.enqueue(msg)
 				return nil
 			},
 		},
