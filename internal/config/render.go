@@ -90,6 +90,15 @@ message:
   # Size of the message text relative to the font's own 12px.
   text_scale: {{ n .Message.TextScale }}
 
+font:
+  # A .ttf, .otf or .ttc to draw messages and the menu with. Empty looks for a
+  # font on this machine.
+  path: {{ q .Font.Path }}
+  # Whether to look for a system font at all. With this off and no path above,
+  # gumpet uses its own small bitmap font, which is always available but goes
+  # blocky when enlarged.
+  system: {{ .Font.System }}
+
 # What the messages page remembers. The record is kept in memory, so it starts
 # empty every time gumpet runs.
 history:

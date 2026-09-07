@@ -5,6 +5,7 @@ go 1.25.0
 require (
 	github.com/hajimehoshi/bitmapfont/v4 v4.2.0
 	github.com/hajimehoshi/ebiten/v2 v2.9.11
+	golang.org/x/text v0.41.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 
@@ -19,5 +20,4 @@ require (
 	golang.org/x/image v0.45.0 // indirect
 	golang.org/x/sync v0.22.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
-	golang.org/x/text v0.41.0 // indirect
 )

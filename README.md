@@ -133,7 +133,9 @@ the file, comments and all. The settings worth knowing about:
 | `pet.scale` | 1.0 | The built-in gopher is 200 × 200 |
 | `message.max_visible` | 3 | How many balloons may be on screen at once |
 | `message.max_width` | 520 | How wide the balloon may grow before the text wraps |
-| `message.text_scale` | 2.0 | Message text size, relative to the font's own 12px |
+| `message.text_scale` | 2.0 | Message text size, relative to a 12px base |
+| `font.path` | *(a system font)* | A .ttf, .otf or .ttc to draw text with |
+| `font.system` | `true` | Whether to look for a font on this machine at all |
 | `window.click_through` | `false` | Let clicks pass through — at the cost of the pet's menu |
 | `history.max` | 200 | How many messages the messages page remembers |
 | `history.hours` | 24 | How long it keeps them; 0 for no time limit |
@@ -235,10 +237,24 @@ speech balloon above the pet, sized to the text, whatever the pet looks like.
 Artwork drawn facing left is mirrored when the pet walks right. Set
 `pet.flip_when_facing_right: false` if yours should never be mirrored.
 
+## Fonts
+
+Text is drawn with a font from this machine, at whatever size
+`message.text_scale` works out to, so it is smooth rather than an enlarged
+bitmap. gumpet looks for a face that covers Japanese as well as Latin:
+Hiragino Sans on macOS, Yu Gothic or Meiryo on Windows, Noto Sans CJK on Linux.
+
+Point `font.path` at a `.ttf`, `.otf` or `.ttc` to use something else. A
+collection's first face is the one used, which is the regular weight in all of
+the above. Setting `font.system: false` with no path falls back to the bundled
+[bitmap font](https://github.com/hajimehoshi/bitmapfont), which is always
+available and needs no file at all, but goes blocky when enlarged.
+
+Nothing is bundled beyond that fallback: a Japanese font is several megabytes,
+and every desktop gumpet runs on already has one.
+
 ## Notes
 
-- Text is rendered with [bitmapfont](https://github.com/hajimehoshi/bitmapfont),
-  which covers Japanese, so no font has to be installed or bundled.
 - The window is transparent, undecorated, always on top, and hides itself from
   the Windows taskbar. It is only as big as the pet and whatever is above it,
   and moves with the pet rather than the pet moving inside it. In `on-message`

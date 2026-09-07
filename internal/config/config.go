@@ -92,7 +92,17 @@ type Config struct {
 	Pet      Pet      `yaml:"pet" json:"pet"`
 	Behavior Behavior `yaml:"behavior" json:"behavior"`
 	Message  Message  `yaml:"message" json:"message"`
+	Font     Font     `yaml:"font" json:"font"`
 	History  History  `yaml:"history" json:"history"`
+}
+
+// Font is what gumpet draws text with.
+type Font struct {
+	// Path is a .ttf, .otf or .ttc to use. Empty looks for one on this machine.
+	Path string `yaml:"path" json:"path"`
+	// System allows falling back to a font found on this machine. With it off,
+	// and no Path, the bundled bitmap font is used.
+	System bool `yaml:"system" json:"system"`
 }
 
 // Server configures the HTTP endpoint that receives messages and serves the
@@ -233,6 +243,10 @@ func Default() Config {
 			MaxWidth:    520,
 			MaxQueue:    20,
 			TextScale:   2,
+		},
+		Font: Font{
+			Path:   "",
+			System: true,
 		},
 		History: History{
 			Max:   200,

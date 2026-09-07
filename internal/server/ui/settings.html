@@ -363,6 +363,27 @@
     </section>
 
     <section>
+      <h2>Font</h2>
+      <div class="row">
+        <label for="font-path">Font file</label>
+        <input type="text" id="font-path" data-path="font.path" placeholder="(a font from this machine)" spellcheck="false">
+        <p class="hint">
+          A .ttf, .otf or .ttc to draw messages and the menu with. Leave it
+          empty and gumpet looks for one on this machine — Hiragino on macOS,
+          Yu Gothic on Windows.
+        </p>
+      </div>
+      <div class="row">
+        <label for="font-system">Look for a system font</label>
+        <input type="checkbox" id="font-system" data-path="font.system">
+        <p class="hint">
+          Turn this off to use gumpet's own bitmap font instead. It is always
+          available, but goes blocky when enlarged.
+        </p>
+      </div>
+    </section>
+
+    <section>
       <h2>Message history</h2>
       <div class="row">
         <label for="history-max">Keep</label>
