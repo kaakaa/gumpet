@@ -240,9 +240,9 @@ func Default() Config {
 		Message: Message{
 			DurationSec: 8,
 			MaxVisible:  3,
-			MaxWidth:    520,
+			MaxWidth:    640,
 			MaxQueue:    20,
-			TextScale:   2,
+			TextScale:   1.5,
 		},
 		Font: Font{
 			Path:   "",

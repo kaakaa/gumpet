@@ -61,7 +61,46 @@
   nav a { color: var(--accent); text-decoration: none; font-weight: 500; }
   nav a:hover { text-decoration: underline; }
 
-  .summary { color: var(--muted); font-size: 13px; margin: 0 0 20px; }
+  .summary { color: var(--muted); font-size: 13px; margin: 0 0 16px; }
+
+  .filters {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+  }
+  .filters input[type=search] {
+    flex: 1 1 260px;
+    min-width: 0;
+    padding: 8px 11px;
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    background: var(--card);
+    color: var(--ink);
+    font: inherit;
+  }
+  .filters select {
+    padding: 8px 11px;
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    background: var(--card);
+    color: var(--ink);
+    font: inherit;
+  }
+  .filters input:focus-visible, .filters select:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
+
+  mark {
+    background: #ffe9a8;
+    color: inherit;
+    border-radius: 2px;
+    padding: 0 1px;
+  }
+  @media (prefers-color-scheme: dark) {
+    mark { background: #6b5a1e; color: #ffeec2; }
+  }
 
   .note {
     padding: 10px 13px;
@@ -151,6 +190,18 @@
   </header>
   <p class="summary" id="summary">Loading&hellip;</p>
 
+  <div class="filters" id="filters" hidden>
+    <input type="search" id="search" placeholder="Search messages" autocomplete="off" spellcheck="false">
+    <select id="range">
+      <option value="0">Any time</option>
+      <option value="600">Last 10 minutes</option>
+      <option value="3600">Last hour</option>
+      <option value="21600">Last 6 hours</option>
+      <option value="86400">Last 24 hours</option>
+      <option value="259200">Last 3 days</option>
+    </select>
+  </div>
+
   <div class="note" id="auth" hidden>
     <p style="margin:0 0 8px">This gumpet needs a token.</p>
     <div class="inline">
@@ -162,9 +213,7 @@
   <div class="note" id="error" hidden></div>
 
   <ul id="list"></ul>
-  <div class="empty" id="empty" hidden>
-    Nothing yet. Send something with <code>gumpetctl hello</code>.
-  </div>
+  <div class="empty" id="empty" hidden></div>
 </main>
 
 <script>
@@ -178,6 +227,9 @@
 
   var $ = function (id) { return document.getElementById(id); };
   var timer = null;
+  // The last thing the server told us, kept so that typing in the search box
+  // filters what is already here rather than waiting on a round trip.
+  var latest = null;
 
   function request(url) {
     var headers = {};
@@ -209,8 +261,46 @@
     return rough + " · " + then.toLocaleTimeString();
   }
 
-  function render(data) {
-    var messages = data.messages || [];
+  // matching narrows the list to what the search box and the time range allow.
+  function matching(messages) {
+    var query = $("search").value.trim().toLowerCase();
+    var seconds = parseInt($("range").value, 10) || 0;
+    var cutoff = seconds > 0 ? Date.now() - seconds * 1000 : 0;
+
+    return messages.filter(function (msg) {
+      if (cutoff > 0 && new Date(msg.queued_at).getTime() < cutoff) { return false; }
+      return query === "" || msg.text.toLowerCase().indexOf(query) >= 0;
+    });
+  }
+
+  // fillHighlighted writes text into el, wrapping each match in a <mark>.
+  // Everything goes in as a text node: these strings come from whatever sent
+  // the message, and must never be parsed as markup.
+  function fillHighlighted(el, text, query) {
+    if (query === "") {
+      el.textContent = text;
+      return;
+    }
+    var haystack = text.toLowerCase();
+    var from = 0;
+    for (;;) {
+      var at = haystack.indexOf(query, from);
+      if (at < 0) { break; }
+      el.appendChild(document.createTextNode(text.slice(from, at)));
+      var hit = document.createElement("mark");
+      hit.textContent = text.slice(at, at + query.length);
+      el.appendChild(hit);
+      from = at + query.length;
+    }
+    el.appendChild(document.createTextNode(text.slice(from)));
+  }
+
+  function render() {
+    if (latest === null) { return; }
+    var all = latest.messages || [];
+    var messages = matching(all);
+    var query = $("search").value.trim().toLowerCase();
+
     var list = $("list");
     list.textContent = "";
 
@@ -219,9 +309,7 @@
 
       var text = document.createElement("p");
       text.className = "text";
-      // textContent, never innerHTML: these strings come from whatever sent
-      // the message.
-      text.textContent = msg.text;
+      fillHighlighted(text, msg.text, query);
       li.appendChild(text);
 
       var badge = document.createElement("span");
@@ -239,10 +327,19 @@
       list.appendChild(li);
     });
 
+    var filtered = messages.length !== all.length;
     $("empty").hidden = messages.length > 0;
+    $("empty").textContent = filtered
+      ? "Nothing matches."
+      : "Nothing yet. Send something with gumpetctl hello.";
+    $("filters").hidden = all.length === 0 && !filtered;
 
-    var limits = data.history || {};
-    var parts = [messages.length + (messages.length === 1 ? " message" : " messages")];
+    var limits = latest.history || {};
+    var counted = filtered
+      ? messages.length + " of " + all.length + " messages"
+      : all.length + (all.length === 1 ? " message" : " messages");
+
+    var parts = [counted];
     if (limits.max) { parts.push("keeping up to " + limits.max); }
     if (limits.hours > 0) {
       parts.push("for " + limits.hours + (limits.hours === 1 ? " hour" : " hours"));
@@ -256,7 +353,8 @@
     return request("api/v1/messages").then(function (data) {
       $("auth").hidden = true;
       $("error").hidden = true;
-      render(data);
+      latest = data;
+      render();
       start();
     }).catch(function (err) {
       stop();
@@ -293,6 +391,11 @@
   $("token-input").addEventListener("keydown", function (e) {
     if (e.key === "Enter") { $("token-save").click(); }
   });
+
+  // Filtering is done here rather than on the server, so it keeps up with
+  // typing and the refresh below never disturbs what is in the box.
+  $("search").addEventListener("input", render);
+  $("range").addEventListener("change", render);
 
   load();
 })();
