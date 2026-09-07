@@ -307,6 +307,16 @@ func (g *Game) advanceMessages(dt time.Duration) {
 	}
 }
 
+// dismiss takes one balloon off the screen early. Whatever is next in the
+// queue takes its place on the following tick, as if it had timed out.
+func (g *Game) dismiss(i int) {
+	if i < 0 || i >= len(g.showing) {
+		return
+	}
+	g.showing = append(g.showing[:i], g.showing[i+1:]...)
+	g.panelDirty = true
+}
+
 // rebuildPanel lays the balloons out into one stack above the pet.
 func (g *Game) rebuildPanel() {
 	if !g.panelDirty {

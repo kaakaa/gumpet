@@ -213,6 +213,13 @@ func (g *Game) handleInput(dt time.Duration) error {
 		return nil
 	}
 
+	// Clicking a balloon takes it down, so a message that has been read does
+	// not have to be waited out.
+	if i := g.balloonAt(px, py); i >= 0 {
+		g.dismiss(i)
+		return nil
+	}
+
 	if g.hovered {
 		g.menu = g.buildMenu()
 		g.menuIdle = 0
@@ -246,6 +253,27 @@ func (g *Game) overPet(px, py float64) bool {
 
 func (g *Game) overWindow(px, py float64) bool {
 	return px >= 0 && py >= 0 && px < g.win.W && py < g.win.H
+}
+
+// balloonAt returns the balloon under a point in the window, or -1. The stack
+// is searched from the top down, matching the order they are drawn in, so a
+// click on an overlap takes down the one actually visible there.
+func (g *Game) balloonAt(px, py float64) int {
+	if g.menu != nil {
+		return -1
+	}
+	for i := len(g.showing) - 1; i >= 0; i-- {
+		b := g.showing[i].balloon
+		if b == nil || i >= len(g.placed) {
+			continue
+		}
+		x := g.win.PanelX + g.placed[i].X
+		y := g.win.PanelY + g.placed[i].Y
+		if px >= x && px < x+b.width && py >= y && py < y+b.height {
+			return i
+		}
+	}
+	return -1
 }
 
 // idleLabel says what the pet does with itself between messages.

@@ -132,8 +132,8 @@ the file, comments and all. The settings worth knowing about:
 | `pet.source` | *(built-in gopher)* | Your own artwork — see below |
 | `pet.scale` | 1.0 | The built-in gopher is 200 × 200 |
 | `message.max_visible` | 3 | How many balloons may be on screen at once |
-| `message.max_width` | 520 | How wide the balloon may grow before the text wraps |
-| `message.text_scale` | 2.0 | Message text size, relative to a 12px base |
+| `message.max_width` | 640 | How wide the balloon may grow before the text wraps |
+| `message.text_scale` | 1.5 | Message text size, relative to a 12px base |
 | `font.path` | *(a system font)* | A .ttf, .otf or .ttc to draw text with |
 | `font.system` | `true` | Whether to look for a font on this machine at all |
 | `window.click_through` | `false` | Let clicks pass through — at the cost of the pet's menu |
@@ -184,10 +184,15 @@ balloons pile up above it, each offset to one side, so a burst looks like a
 crowd talking rather than a tidy queue. The oldest of them is the one at the
 bottom, with the tail.
 
+Clicking a balloon takes it down, so a message that has been read does not have
+to be waited out. Whatever is next in the queue moves up into its place.
+
 Everything gumpet is sent is listed at
 [http://127.0.0.1:8787/messages](http://127.0.0.1:8787/messages), newest first,
 with whether the pet has said it yet. That covers messages still waiting their
-turn, and ones that arrived while the pet was too busy to take them.
+turn, and ones that arrived while the pet was too busy to take them. The page
+has a search box that narrows the list as you type, matches highlighted, and a
+time range to go with it — the last 10 minutes through to the last 3 days.
 
 The list is kept in memory, so it starts empty every time gumpet runs.
 `history.max` and `history.hours` decide how much of it is kept; whichever
