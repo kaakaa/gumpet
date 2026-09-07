@@ -99,8 +99,8 @@ type Game struct {
 	// menuIdle is how long the cursor has been away from the window, which is
 	// the only sign we get that the user has moved on.
 	menuIdle time.Duration
-	// hovered is whether the cursor is resting on the pet, which stops it so
-	// that it can be clicked.
+	// hovered is whether the cursor is resting on the pet or on one of its
+	// balloons, which stops it so that either can be clicked.
 	hovered bool
 
 	started bool
@@ -198,10 +198,10 @@ func (g *Game) stage() layout.Rect {
 }
 
 // canRoam reports whether the pet should be walking. It carries on walking
-// while it talks — the balloon is drawn above it and travels with it — but
+// while it talks — the balloons are drawn above it and travel with it — but
 // holds still while its menu is open, so the rows stay under the cursor, and
-// while the cursor is on it, so that a pet crossing the screen at speed is
-// still something you can click.
+// while the cursor is on it or on one of its balloons, so that a pet crossing
+// the screen at speed is still something you can aim at.
 func (g *Game) canRoam() bool {
 	return g.menu == nil && !g.hovered
 }

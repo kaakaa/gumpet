@@ -185,7 +185,8 @@ crowd talking rather than a tidy queue. The oldest of them is the one at the
 bottom, with the tail.
 
 Clicking a balloon takes it down, so a message that has been read does not have
-to be waited out. Whatever is next in the queue moves up into its place.
+to be waited out. Whatever is next in the queue moves up into its place. The pet
+holds still while the cursor is over a balloon, so it stays where you aimed.
 
 Everything gumpet is sent is listed at
 [http://127.0.0.1:8787/messages](http://127.0.0.1:8787/messages), newest first,
@@ -212,8 +213,8 @@ Clicking the pet opens a menu with:
 Changes made here are written to the config file and show up on the settings
 page, and the other way round.
 
-The pet stops walking while the cursor is on it, so one crossing the screen at
-speed is still something you can click. The menu closes when you pick something
+The pet stops walking while the cursor is on it or on one of its balloons, so
+neither is a moving target however fast it is going. The menu closes when you pick something
 from it, when you click elsewhere on the pet, or a few seconds after the cursor
 leaves it.
 
