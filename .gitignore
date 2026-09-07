@@ -1,0 +1,5 @@
+/bin/
+/dist/
+
+# Claude Code's per-machine settings.
+/.claude/settings.local.json

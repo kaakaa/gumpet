@@ -1,0 +1,604 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>gumpet settings</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f6f6f4;
+    --card: #ffffff;
+    --ink: #1a1a1a;
+    --muted: #6b6b6b;
+    --line: #dedece;
+    --accent: #00add8;
+    --accent-ink: #ffffff;
+    --ok-bg: #e6f6ec;
+    --ok-ink: #16653a;
+    --err-bg: #fdeaea;
+    --err-ink: #9b1c1c;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #17181a;
+      --card: #202225;
+      --ink: #e8e8e6;
+      --muted: #9a9a97;
+      --line: #34363a;
+      --accent: #00add8;
+      --accent-ink: #06202a;
+      --ok-bg: #16331f;
+      --ok-ink: #8ddba8;
+      --err-bg: #3a1d1d;
+      --err-ink: #f3a3a3;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue",
+          "Hiragino Sans", "Yu Gothic UI", Meiryo, sans-serif;
+  }
+  main { max-width: 660px; margin: 0 auto; padding: 32px 20px 96px; }
+
+  header { margin-bottom: 24px; }
+  h1 { margin: 0; font-size: 22px; letter-spacing: -0.01em; }
+  h1 span { color: var(--muted); font-weight: 400; }
+  .path {
+    margin: 6px 0 0;
+    color: var(--muted);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 12px;
+    overflow-wrap: anywhere;
+  }
+
+  section {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 4px 18px 18px;
+    margin-bottom: 16px;
+  }
+  h2 {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    margin: 18px 0 14px;
+  }
+
+  .row {
+    display: grid;
+    grid-template-columns: 190px 1fr;
+    gap: 10px 16px;
+    align-items: center;
+    padding: 7px 0;
+  }
+  .row + .row { border-top: 1px solid var(--line); }
+  @media (max-width: 540px) {
+    .row { grid-template-columns: 1fr; gap: 4px; }
+  }
+  .row > label { font-weight: 500; }
+  .hint {
+    grid-column: 2;
+    margin: 0;
+    color: var(--muted);
+    font-size: 12px;
+  }
+  @media (max-width: 540px) { .hint { grid-column: 1; } }
+
+  input[type=text], input[type=number], select {
+    width: 100%;
+    max-width: 340px;
+    padding: 7px 9px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: var(--bg);
+    color: var(--ink);
+    font: inherit;
+  }
+  input[type=number] { max-width: 140px; }
+  input:focus-visible, select:focus-visible, button:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
+  input[type=checkbox] { width: 17px; height: 17px; accent-color: var(--accent); }
+  input:disabled, select:disabled { opacity: 0.45; }
+
+  .tag {
+    display: inline-block;
+    margin-left: 8px;
+    padding: 1px 7px;
+    border-radius: 999px;
+    background: var(--bg);
+    border: 1px solid var(--line);
+    color: var(--muted);
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    vertical-align: 1px;
+  }
+
+  button {
+    padding: 9px 18px;
+    border: 1px solid transparent;
+    border-radius: 7px;
+    background: var(--accent);
+    color: var(--accent-ink);
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  button.secondary {
+    background: var(--card);
+    color: var(--ink);
+    border-color: var(--line);
+    font-weight: 500;
+  }
+  /* A disabled Save has to read as clearly inert, not merely dimmed: it is the
+     signal that there is nothing to save. */
+  button:disabled {
+    background: var(--card);
+    color: var(--muted);
+    border-color: var(--line);
+    cursor: default;
+  }
+
+  .bar {
+    position: fixed;
+    left: 0; right: 0; bottom: 0;
+    background: var(--card);
+    border-top: 1px solid var(--line);
+    padding: 12px 20px;
+  }
+  .bar-inner {
+    max-width: 660px;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .bar .status { color: var(--muted); font-size: 13px; }
+
+  .note {
+    padding: 10px 13px;
+    border-radius: 8px;
+    margin-bottom: 16px;
+    font-size: 13px;
+    overflow-wrap: anywhere;
+  }
+  .note.ok { background: var(--ok-bg); color: var(--ok-ink); }
+  .note.err { background: var(--err-bg); color: var(--err-ink); }
+
+  .inline { display: flex; gap: 8px; max-width: 340px; }
+  .inline input { flex: 1; }
+  .inline button { padding: 7px 14px; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>gumpet <span>settings</span></h1>
+    <p class="path" id="path"></p>
+  </header>
+
+  <div class="note err" id="auth" hidden>
+    <p style="margin:0 0 8px">This gumpet needs a token.</p>
+    <div class="inline">
+      <input type="text" id="token-input" placeholder="server.token" autocomplete="off">
+      <button type="button" id="token-save">Unlock</button>
+    </div>
+  </div>
+
+  <div class="note" id="banner" hidden></div>
+
+  <form id="form" hidden>
+    <section>
+      <h2>Where the pet may go</h2>
+      <div class="row">
+        <label for="fullscreen">Roam the whole screen</label>
+        <input type="checkbox" id="fullscreen" data-path="stage.fullscreen">
+        <p class="hint">
+          gumpet's window is only as big as the pet and follows it around, so
+          letting it roam wider costs no screen space.
+        </p>
+      </div>
+      <div class="row">
+        <label for="anchor">Corner</label>
+        <select id="anchor" data-path="stage.anchor" data-corner-only>
+          <option value="bottom-right">Bottom right</option>
+          <option value="bottom-left">Bottom left</option>
+          <option value="top-right">Top right</option>
+          <option value="top-left">Top left</option>
+          <option value="center">Center</option>
+          <option value="custom">Custom position</option>
+        </select>
+        <p class="hint">Which part of the monitor the pet keeps to.</p>
+      </div>
+      <div class="row">
+        <label for="stage-width">Size</label>
+        <div>
+          <input type="number" id="stage-width" data-path="stage.width" data-kind="int" min="1" step="1" data-corner-only>
+          &times;
+          <input type="number" data-path="stage.height" data-kind="int" min="1" step="1" data-corner-only>
+        </div>
+        <p class="hint">The area the pet can walk around in, in pixels.</p>
+      </div>
+      <div class="row">
+        <label for="margin-x">Margin</label>
+        <div>
+          <input type="number" id="margin-x" data-path="stage.margin_x" data-kind="int" step="1" data-corner-only>
+          &times;
+          <input type="number" data-path="stage.margin_y" data-kind="int" step="1" data-corner-only>
+        </div>
+        <p class="hint">Distance from the corner. Raise the second one to clear the macOS Dock.</p>
+      </div>
+      <div class="row">
+        <label for="stage-x">Custom position</label>
+        <div>
+          <input type="number" id="stage-x" data-path="stage.x" data-kind="int" step="1" data-custom-only>
+          ,
+          <input type="number" data-path="stage.y" data-kind="int" step="1" data-custom-only>
+        </div>
+        <p class="hint">Monitor coordinates, used only when the corner is "Custom position".</p>
+      </div>
+    </section>
+
+    <section>
+      <h2>Pet</h2>
+      <div class="row">
+        <label for="source">Artwork</label>
+        <input type="text" id="source" data-path="pet.source" placeholder="(the built-in gopher)" spellcheck="false">
+        <p class="hint">
+          Path to a PNG, JPEG, animated GIF, or a directory of frames played in
+          file-name order. Leave empty for the bundled gopher.
+        </p>
+      </div>
+      <div class="row">
+        <label for="scale">Scale</label>
+        <input type="number" id="scale" data-path="pet.scale" data-kind="float" min="0.05" step="0.05">
+        <p class="hint">The built-in gopher is 200 &times; 200 pixels at 1.0.</p>
+      </div>
+      <div class="row">
+        <label for="fps">Frame rate</label>
+        <input type="number" id="fps" data-path="pet.fps" data-kind="float" min="0.5" step="0.5">
+        <p class="hint">Ignored for animated GIFs, which carry their own timing.</p>
+      </div>
+      <div class="row">
+        <label for="flip">Mirror when walking right</label>
+        <input type="checkbox" id="flip" data-path="pet.flip_when_facing_right">
+        <p class="hint">Turn this off if your artwork should never be flipped.</p>
+      </div>
+    </section>
+
+    <section>
+      <h2>Behaviour</h2>
+      <div class="row">
+        <label for="mode">When to show the pet</label>
+        <select id="mode" data-path="behavior.mode">
+          <option value="always">Always on screen</option>
+          <option value="on-message">Only while a message is up</option>
+        </select>
+      </div>
+      <div class="row">
+        <label for="roam">How it gets around</label>
+        <select id="roam" data-path="behavior.roam">
+          <option value="none">Stands still</option>
+          <option value="horizontal">Walks back and forth</option>
+          <option value="perimeter">Walks round the edges</option>
+          <option value="wander">Wanders anywhere</option>
+        </select>
+      </div>
+      <div class="row">
+        <label for="speed">Walking speed</label>
+        <input type="number" id="speed" data-path="behavior.speed" data-kind="float" min="0" step="5">
+        <p class="hint">Pixels per second.</p>
+      </div>
+    </section>
+
+    <section>
+      <h2>Messages</h2>
+      <div class="row">
+        <label for="duration">Time on screen</label>
+        <input type="number" id="duration" data-path="message.duration_sec" data-kind="float" min="0.5" step="0.5">
+        <p class="hint">Seconds. A message may override this when it is sent.</p>
+      </div>
+      <div class="row">
+        <label for="max-width">Balloon width</label>
+        <input type="number" id="max-width" data-path="message.max_width" data-kind="int" min="60" step="20">
+        <p class="hint">How wide the balloon may grow before the text wraps, in pixels.</p>
+      </div>
+      <div class="row">
+        <label for="text-scale">Text size</label>
+        <input type="number" id="text-scale" data-path="message.text_scale" data-kind="float" min="0.5" step="0.25">
+        <p class="hint">Relative to the built-in font's own 12px.</p>
+      </div>
+      <div class="row">
+        <label for="max-queue">Queue length</label>
+        <input type="number" id="max-queue" data-path="message.max_queue" data-kind="int" min="1" step="1">
+        <p class="hint">How many messages may wait their turn before the oldest are dropped.</p>
+      </div>
+      <div class="row">
+        <label for="test-text">Try it</label>
+        <div class="inline">
+          <input type="text" id="test-text" value="Hello, gopher!" autocomplete="off">
+          <button type="button" class="secondary" id="test-send">Send</button>
+        </div>
+        <p class="hint">Sends a message to the pet right now, using the settings it is currently running with.</p>
+      </div>
+    </section>
+
+    <section>
+      <h2>Window</h2>
+      <div class="row">
+        <label for="on-top">Always on top</label>
+        <input type="checkbox" id="on-top" data-path="window.always_on_top">
+      </div>
+      <div class="row">
+        <label for="click-through">Click through</label>
+        <input type="checkbox" id="click-through" data-path="window.click_through">
+        <p class="hint">
+          Let clicks reach whatever is behind the pet, so it never steals one.
+          Turning this on also means clicking the pet no longer opens its menu.
+        </p>
+      </div>
+      <div class="row">
+        <label for="skip-taskbar">Hide from the taskbar<span class="tag" data-restart>restart</span></label>
+        <input type="checkbox" id="skip-taskbar" data-path="window.skip_taskbar">
+        <p class="hint">Windows only.</p>
+      </div>
+    </section>
+
+    <section>
+      <h2>Server</h2>
+      <div class="row">
+        <label for="addr">Listen address<span class="tag" data-restart>restart</span></label>
+        <input type="text" id="addr" data-path="server.addr" spellcheck="false">
+        <p class="hint">Keep this on 127.0.0.1 unless you want the network to reach your desktop.</p>
+      </div>
+      <div class="row">
+        <label for="token">Token</label>
+        <input type="text" id="token" data-path="server.token" placeholder="(no token required)" autocomplete="off" spellcheck="false">
+        <p class="hint">When set, every API request must present it.</p>
+      </div>
+    </section>
+  </form>
+</main>
+
+<div class="bar">
+  <div class="bar-inner">
+    <button type="button" id="save" disabled>Save</button>
+    <button type="button" class="secondary" id="revert" disabled>Revert</button>
+    <span class="status" id="status">Loading&hellip;</span>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var TOKEN_KEY = "gumpet-token";
+  var fields = Array.prototype.slice.call(document.querySelectorAll("[data-path]"));
+  var loaded = null;   // the config as the server last reported it
+  var token = "";
+  try { token = sessionStorage.getItem(TOKEN_KEY) || ""; } catch (e) { token = ""; }
+
+  var $ = function (id) { return document.getElementById(id); };
+
+  function get(obj, path) {
+    return path.split(".").reduce(function (o, k) { return o == null ? undefined : o[k]; }, obj);
+  }
+
+  function set(obj, path, value) {
+    var keys = path.split(".");
+    var last = keys.pop();
+    keys.reduce(function (o, k) { return o[k]; }, obj)[last] = value;
+  }
+
+  function request(method, url, body) {
+    var headers = {};
+    if (token) { headers["X-Gumpet-Token"] = token; }
+    if (body !== undefined) { headers["Content-Type"] = "application/json"; }
+    return fetch(url, {
+      method: method,
+      headers: headers,
+      body: body === undefined ? undefined : JSON.stringify(body)
+    }).then(function (res) {
+      return res.json().catch(function () { return {}; }).then(function (data) {
+        if (res.status === 401) {
+          var err = new Error("unauthorized");
+          err.unauthorized = true;
+          throw err;
+        }
+        if (!res.ok) { throw new Error(data.error || (res.status + " " + res.statusText)); }
+        return data;
+      });
+    });
+  }
+
+  function note(kind, text) {
+    var el = $("banner");
+    el.className = "note " + kind;
+    el.textContent = text;
+    el.hidden = false;
+  }
+
+  function clearNote() { $("banner").hidden = true; }
+
+  function status(text) { $("status").textContent = text; }
+
+  function fill(cfg) {
+    fields.forEach(function (el) {
+      var value = get(cfg, el.dataset.path);
+      if (el.type === "checkbox") { el.checked = !!value; } else { el.value = value; }
+    });
+    syncEnabled();
+  }
+
+  // collect returns the loaded config with every field's current value written
+  // over it, so keys the page does not show are carried through untouched.
+  function collect() {
+    var cfg = JSON.parse(JSON.stringify(loaded));
+    fields.forEach(function (el) {
+      var value;
+      if (el.type === "checkbox") {
+        value = el.checked;
+      } else if (el.dataset.kind === "int") {
+        value = parseInt(el.value, 10);
+        if (isNaN(value)) { value = 0; }
+      } else if (el.dataset.kind === "float") {
+        value = parseFloat(el.value);
+        if (isNaN(value)) { value = 0; }
+      } else {
+        value = el.value;
+      }
+      set(cfg, el.dataset.path, value);
+    });
+    return cfg;
+  }
+
+  // syncEnabled greys out whatever the current choices make irrelevant: the
+  // corner settings when the pet roams the whole screen, and the x/y boxes
+  // unless that corner is "custom".
+  function syncEnabled() {
+    var fullscreen = $("fullscreen").checked;
+    var custom = $("anchor").value === "custom";
+    document.querySelectorAll("[data-corner-only]").forEach(function (el) {
+      el.disabled = fullscreen;
+    });
+    document.querySelectorAll("[data-custom-only]").forEach(function (el) {
+      el.disabled = fullscreen || !custom;
+    });
+  }
+
+  // changes returns only the settings whose value differs from the ones this
+  // page loaded. Sending the whole config instead would mean a page left open
+  // in a tab could quietly undo something changed from the pet's own menu in
+  // the meantime; the server merges a partial body into whatever is current.
+  function changes() {
+    return diff(loaded, collect());
+  }
+
+  function diff(was, now) {
+    var out = {};
+    Object.keys(now).forEach(function (key) {
+      var before = was ? was[key] : undefined;
+      var after = now[key];
+      if (after !== null && typeof after === "object") {
+        var nested = diff(before, after);
+        if (Object.keys(nested).length > 0) { out[key] = nested; }
+      } else if (before !== after) {
+        out[key] = after;
+      }
+    });
+    return out;
+  }
+
+  function dirty() {
+    return loaded !== null && Object.keys(changes()).length > 0;
+  }
+
+  function refreshButtons() {
+    var changed = dirty();
+    $("save").disabled = !changed;
+    $("revert").disabled = !changed;
+    if (changed) { status("Unsaved changes"); } else { status("Saved"); }
+  }
+
+  function adopt(data) {
+    loaded = data.config;
+    $("path").textContent = data.path;
+    if (data.restart_required && data.restart_required.length) {
+      document.querySelectorAll("[data-restart]").forEach(function (el) {
+        el.title = "Takes effect the next time gumpet starts";
+      });
+    }
+    fill(loaded);
+    $("form").hidden = false;
+    $("auth").hidden = true;
+    refreshButtons();
+  }
+
+  function askForToken() {
+    $("auth").hidden = false;
+    $("form").hidden = true;
+    status("Locked");
+    $("token-input").focus();
+  }
+
+  function load() {
+    request("GET", "api/v1/config").then(adopt).catch(function (err) {
+      if (err.unauthorized) { askForToken(); return; }
+      note("err", "Could not load settings: " + err.message);
+      status("Error");
+    });
+  }
+
+  $("save").addEventListener("click", function () {
+    clearNote();
+    status("Saving…");
+    request("PUT", "api/v1/config", changes()).then(function (data) {
+      // Saving a new token means the next request needs it.
+      token = data.config.server.token;
+      try { sessionStorage.setItem(TOKEN_KEY, token); } catch (e) { /* private window */ }
+      adopt(data);
+      note("ok", "Settings saved. The pet picked them up straight away — except the listen address and the taskbar setting, which wait for a restart.");
+    }).catch(function (err) {
+      if (err.unauthorized) { askForToken(); return; }
+      note("err", err.message);
+      status("Not saved");
+    });
+  });
+
+  $("revert").addEventListener("click", function () {
+    clearNote();
+    fill(loaded);
+    refreshButtons();
+  });
+
+  $("token-save").addEventListener("click", function () {
+    token = $("token-input").value.trim();
+    try { sessionStorage.setItem(TOKEN_KEY, token); } catch (e) { /* private window */ }
+    clearNote();
+    load();
+  });
+
+  $("token-input").addEventListener("keydown", function (e) {
+    if (e.key === "Enter") { $("token-save").click(); }
+  });
+
+  $("test-send").addEventListener("click", function () {
+    var text = $("test-text").value;
+    if (!text.trim()) { return; }
+    clearNote();
+    request("POST", "api/v1/messages", { text: text }).then(function () {
+      note("ok", "Sent. Look at your pet.");
+    }).catch(function (err) {
+      if (err.unauthorized) { askForToken(); return; }
+      note("err", err.message);
+    });
+  });
+
+  fields.forEach(function (el) {
+    el.addEventListener("input", refreshButtons);
+    el.addEventListener("change", refreshButtons);
+  });
+
+  // Coming back to the tab is the moment to pick up anything changed from the
+  // pet's menu. Reloading over unsaved edits would lose them, so this only
+  // refreshes a page with nothing pending.
+  window.addEventListener("focus", function () {
+    if (loaded !== null && !dirty()) { load(); }
+  });
+  $("anchor").addEventListener("change", syncEnabled);
+  $("fullscreen").addEventListener("change", syncEnabled);
+
+  load();
+})();
+</script>
+</body>
+</html>
