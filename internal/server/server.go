@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/kaakaa/gumpet/internal/config"
+	"github.com/kaakaa/gumpet/internal/fontfile"
 	"github.com/kaakaa/gumpet/internal/history"
 	"github.com/kaakaa/gumpet/internal/message"
 	"github.com/kaakaa/gumpet/internal/petsrc"
@@ -169,6 +170,10 @@ func (s *Server) handlePutConfig(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := petsrc.Validate(cfg.Pet.Source); err != nil {
 		writeError(w, http.StatusBadRequest, "pet.source: "+err.Error())
+		return
+	}
+	if _, err := fontfile.Resolve(cfg.Font.Path, cfg.Font.System); err != nil {
+		writeError(w, http.StatusBadRequest, "font.path: "+err.Error())
 		return
 	}
 

@@ -44,17 +44,17 @@ type balloon struct {
 }
 
 // layoutBalloon wraps and measures one message.
-func (g *Game) layoutBalloon(text string) *balloon {
-	scale := g.cfg.Message.TextScale
+func (g *Game) layoutBalloon(msg string) *balloon {
+	f := g.fonts.message
 	// The balloon may not be wider than the monitor, whatever the setting says.
 	maxWidth := math.Min(float64(g.cfg.Message.MaxWidth), g.monitor.W)
 	maxText := math.Max(maxWidth-2*balloonPadding, 1)
 
-	lines := g.wrap(text, maxText/scale)
+	lines := g.wrap(f, msg, maxText)
 	b := &balloon{
 		lines: lines,
-		textW: g.blockWidth(lines) * scale,
-		textH: float64(len(lines)) * lineHeight(g.face) * scale,
+		textW: g.blockWidth(f, lines),
+		textH: float64(len(lines)) * f.lineHeight(),
 	}
 	b.width = b.textW + 2*balloonPadding
 	b.height = b.textH + 2*balloonPadding
@@ -129,7 +129,7 @@ func (g *Game) drawBalloons(screen *ebiten.Image) {
 		fillAndStroke(screen, path, ds)
 
 		g.drawText(screen, b.lines, (x+balloonPadding)*ds, (y+balloonPadding)*ds,
-			g.cfg.Message.TextScale*ds, textColor)
+			g.fonts.message, textColor)
 	}
 }
 
@@ -162,27 +162,29 @@ func (g *Game) drawMenu(screen *ebiten.Image) {
 			labelColor = mutedColor
 		}
 		textY := ry + menuRowPadY
-		g.drawText(screen, []string{it.label}, rx*ds, textY*ds, menuTextScale*ds, labelColor)
+		g.drawText(screen, []string{it.label}, rx*ds, textY*ds, g.fonts.menu, labelColor)
 
 		if it.detail != "" {
-			w := g.blockWidth([]string{it.detail}) * menuTextScale
-			g.drawText(screen, []string{it.detail}, (rx+rw-w)*ds, textY*ds, menuTextScale*ds, mutedColor)
+			w := g.blockWidth(g.fonts.menu, []string{it.detail})
+			g.drawText(screen, []string{it.detail}, (rx+rw-w)*ds, textY*ds, g.fonts.menu, mutedColor)
 		}
 	}
 }
 
 // drawText draws lines with their top-left corner at (x, y) in physical pixels.
-// scale converts font units to physical pixels.
-func (g *Game) drawText(screen *ebiten.Image, lines []string, x, y, scale float64, clr color.Color) {
+func (g *Game) drawText(screen *ebiten.Image, lines []string, x, y float64, f fontFace, clr color.Color) {
 	op := &text.DrawOptions{}
-	op.GeoM.Scale(scale, scale)
+	if f.draw != 1 {
+		op.GeoM.Scale(f.draw, f.draw)
+	}
 	op.GeoM.Translate(x, y)
-	// A bitmap font scaled by a whole number stays crisp; smoothing only blurs
-	// it.
+	// The bitmap font is the only one that gets enlarged, and enlarging it by a
+	// whole number keeps it crisp; smoothing would only blur it. An outline
+	// face is built at its final size and never scaled, so the filter is moot.
 	op.Filter = ebiten.FilterNearest
 	op.ColorScale.ScaleWithColor(clr)
-	op.LineSpacing = lineHeight(g.face)
-	text.Draw(screen, strings.Join(lines, "\n"), g.face, op)
+	op.LineSpacing = f.faceLineHeight()
+	text.Draw(screen, strings.Join(lines, "\n"), f.face, op)
 }
 
 // drawWindowBounds outlines the window, so GUMPET_DEBUG=1 shows exactly how

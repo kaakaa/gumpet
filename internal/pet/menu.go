@@ -128,19 +128,19 @@ func (g *Game) buildMenu() *menu {
 
 // measure works out how much room the menu needs.
 func (m *menu) measure(g *Game) {
-	measurer := faceMeasurer{g.face}
+	f := g.fonts.menu
 	widest := 0.0
 	for _, it := range m.items {
-		w := measurer.Advance(it.label)
+		w := f.Advance(it.label)
 		if it.detail != "" {
-			w += menuGutter + measurer.Advance(it.detail)
+			w += menuGutter + f.Advance(it.detail)
 		}
 		widest = math.Max(widest, w)
 	}
 
-	m.rowH = lineHeight(g.face)*menuTextScale + 2*menuRowPadY
+	m.rowH = f.lineHeight() + 2*menuRowPadY
 	// A long listen address must not push the menu wider than the screen.
-	m.width = math.Min(widest*menuTextScale+2*menuPadding, g.monitor.W)
+	m.width = math.Min(widest+2*menuPadding, g.monitor.W)
 	m.height = float64(len(m.items))*m.rowH + 2*menuPadding
 }
 

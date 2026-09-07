@@ -25,6 +25,7 @@ func TestRenderRoundTrips(t *testing.T) {
 				Pet:      Pet{Source: "/tmp/cat.gif", Scale: 0.75, FPS: 12.5, FlipWhenFacingRight: false},
 				Behavior: Behavior{Mode: ModeOnMessage, IdleOpacity: 0.2, Roam: RoamWander, Speed: 0},
 				Message:  Message{DurationSec: 12.25, MaxVisible: 1, MaxWidth: 300, MaxQueue: 3, TextScale: 1.5},
+				Font:     Font{Path: "/tmp/My Font.ttc", System: false},
 				History:  History{Max: 10, Hours: 0.5},
 			},
 		},

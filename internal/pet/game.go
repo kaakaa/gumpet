@@ -13,9 +13,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/hajimehoshi/bitmapfont/v4"
 	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/hajimehoshi/ebiten/v2/text/v2"
 
 	"github.com/kaakaa/gumpet/internal/config"
 	"github.com/kaakaa/gumpet/internal/history"
@@ -59,7 +57,7 @@ type Game struct {
 	cfg     config.Config
 	updates <-chan config.Config
 	pack    *petpack.Pack
-	face    text.Face
+	fonts   fonts
 	inbox   <-chan message.Message
 	history *history.Store
 	quit    <-chan struct{}
@@ -116,7 +114,6 @@ func New(o Options) *Game {
 		cfg:         cfg,
 		updates:     o.Store.Subscribe(8),
 		pack:        o.Pack,
-		face:        text.NewGoXFace(bitmapfont.FaceEA),
 		inbox:       o.Inbox,
 		history:     o.History,
 		quit:        o.Quit,
@@ -159,6 +156,7 @@ func (g *Game) Update() error {
 	dt := time.Second / time.Duration(ebiten.TPS())
 
 	g.drainUpdates()
+	g.ensureFonts()
 	g.drainInbox()
 	g.advanceMessages(dt)
 	if err := g.handleInput(dt); err != nil {
