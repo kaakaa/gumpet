@@ -186,7 +186,11 @@ func (g *Game) handleInput(dt time.Duration) error {
 
 	cx, cy := ebiten.CursorPosition()
 	px, py := float64(cx)/g.deviceScale, float64(cy)/g.deviceScale
-	g.hovered = g.overPet(px, py)
+	// Aiming at either the pet or one of its balloons brings it to a halt, so
+	// that neither is a moving target.
+	onPet := g.overPet(px, py)
+	onBalloon := g.balloonAt(px, py)
+	g.hovered = onPet || onBalloon >= 0
 
 	if g.menu != nil {
 		if g.overWindow(px, py) {
@@ -215,12 +219,12 @@ func (g *Game) handleInput(dt time.Duration) error {
 
 	// Clicking a balloon takes it down, so a message that has been read does
 	// not have to be waited out.
-	if i := g.balloonAt(px, py); i >= 0 {
-		g.dismiss(i)
+	if onBalloon >= 0 {
+		g.dismiss(onBalloon)
 		return nil
 	}
 
-	if g.hovered {
+	if onPet {
 		g.menu = g.buildMenu()
 		g.menuIdle = 0
 	}
