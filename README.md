@@ -88,10 +88,12 @@ The server listens on `127.0.0.1:8787` by default.
 | Method | Path                 | Body                                     |
 | ------ | -------------------- | ---------------------------------------- |
 | `POST` | `/api/v1/messages`   | `{"text": "…", "duration_sec": 10}`, or plain text |
+| `GET`  | `/api/v1/messages`   | — (what has been received, newest first) |
 | `GET`  | `/api/v1/config`     | —                                        |
 | `PUT`  | `/api/v1/config`     | A whole or partial config, as JSON       |
 | `GET`  | `/api/v1/healthz`    | —                                        |
 | `GET`  | `/`                  | the settings page                        |
+| `GET`  | `/messages`          | the messages page                        |
 
 `duration_sec` is optional and overrides `message.duration_sec` for that one
 message. Set `server.token` in the config to require a token, sent as
@@ -128,9 +130,12 @@ the file, comments and all. The settings worth knowing about:
 | `behavior.speed` | 45 | Walking speed, pixels per second |
 | `pet.source` | *(built-in gopher)* | Your own artwork — see below |
 | `pet.scale` | 1.0 | The built-in gopher is 200 × 200 |
+| `message.max_visible` | 3 | How many balloons may be on screen at once |
 | `message.max_width` | 520 | How wide the balloon may grow before the text wraps |
 | `message.text_scale` | 2.0 | Message text size, relative to the font's own 12px |
 | `window.click_through` | `false` | Let clicks pass through — at the cost of the pet's menu |
+| `history.max` | 200 | How many messages the messages page remembers |
+| `history.hours` | 24 | How long it keeps them; 0 for no time limit |
 
 Run with `GUMPET_DEBUG=1` to outline the window, which shows exactly how much of
 the screen the pet is covering.
@@ -154,6 +159,23 @@ gumpet's window is only as big as the pet and whatever it is saying, and it
 moves around the screen to follow the pet — so `stage.fullscreen: true` lets the
 pet cross the whole display without a screen-sized rectangle sitting over your
 desktop.
+
+## Messages
+
+Messages go into a queue and the pet works through it oldest first. When
+several arrive at once it says several at once: up to `message.max_visible`
+balloons pile up above it, each offset to one side, so a burst looks like a
+crowd talking rather than a tidy queue. The oldest of them is the one at the
+bottom, with the tail.
+
+Everything gumpet is sent is listed at
+[http://127.0.0.1:8787/messages](http://127.0.0.1:8787/messages), newest first,
+with whether the pet has said it yet. That covers messages still waiting their
+turn, and ones that arrived while the pet was too busy to take them.
+
+The list is kept in memory, so it starts empty every time gumpet runs.
+`history.max` and `history.hours` decide how much of it is kept; whichever
+limit bites first wins.
 
 ## The menu
 

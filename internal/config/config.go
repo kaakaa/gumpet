@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -85,6 +86,7 @@ type Config struct {
 	Pet      Pet      `yaml:"pet" json:"pet"`
 	Behavior Behavior `yaml:"behavior" json:"behavior"`
 	Message  Message  `yaml:"message" json:"message"`
+	History  History  `yaml:"history" json:"history"`
 }
 
 // Server configures the HTTP endpoint that receives messages and serves the
@@ -152,6 +154,10 @@ type Behavior struct {
 // Message controls how long text stays up and how big it is drawn.
 type Message struct {
 	DurationSec float64 `yaml:"duration_sec" json:"duration_sec"`
+	// MaxVisible is how many balloons may be on screen at once. Messages that
+	// arrive together are shown together, up to this many, which is what makes
+	// a burst look like a crowd rather than a queue.
+	MaxVisible int `yaml:"max_visible" json:"max_visible"`
 	// MaxWidth is how wide the speech balloon may grow before the text wraps,
 	// in pixels.
 	MaxWidth int `yaml:"max_width" json:"max_width"`
@@ -159,6 +165,20 @@ type Message struct {
 	// dropped once it is full.
 	MaxQueue  int     `yaml:"max_queue" json:"max_queue"`
 	TextScale float64 `yaml:"text_scale" json:"text_scale"`
+}
+
+// History is how much of what the pet has said is kept for the messages page.
+// The record lives in memory, so it starts empty on every run.
+type History struct {
+	// Max is how many messages to keep, newest first.
+	Max int `yaml:"max" json:"max"`
+	// Hours is how long to keep them. Zero keeps them until Max is reached.
+	Hours float64 `yaml:"hours" json:"hours"`
+}
+
+// Retention is how long a message is kept, or zero for no time limit.
+func (h History) Retention() time.Duration {
+	return time.Duration(h.Hours * float64(time.Hour))
 }
 
 // Default returns the settings gumpet uses before anyone changes anything.
@@ -199,9 +219,14 @@ func Default() Config {
 		},
 		Message: Message{
 			DurationSec: 8,
+			MaxVisible:  3,
 			MaxWidth:    520,
 			MaxQueue:    20,
 			TextScale:   2,
+		},
+		History: History{
+			Max:   200,
+			Hours: 24,
 		},
 	}
 }
@@ -248,6 +273,9 @@ func (c Config) Validate() error {
 	if c.Message.DurationSec <= 0 {
 		return fmt.Errorf("message.duration_sec must be positive, got %v", c.Message.DurationSec)
 	}
+	if c.Message.MaxVisible <= 0 {
+		return fmt.Errorf("message.max_visible must be positive, got %d", c.Message.MaxVisible)
+	}
 	if c.Message.MaxWidth <= 0 {
 		return fmt.Errorf("message.max_width must be positive, got %d", c.Message.MaxWidth)
 	}
@@ -256,6 +284,12 @@ func (c Config) Validate() error {
 	}
 	if c.Message.TextScale <= 0 {
 		return fmt.Errorf("message.text_scale must be positive, got %v", c.Message.TextScale)
+	}
+	if c.History.Max <= 0 {
+		return fmt.Errorf("history.max must be positive, got %d", c.History.Max)
+	}
+	if c.History.Hours < 0 {
+		return fmt.Errorf("history.hours must not be negative, got %v", c.History.Hours)
 	}
 	return nil
 }

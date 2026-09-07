@@ -45,7 +45,16 @@
   }
   main { max-width: 660px; margin: 0 auto; padding: 32px 20px 96px; }
 
-  header { margin-bottom: 24px; }
+  header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: 24px;
+  }
+  nav a { color: var(--accent); text-decoration: none; font-weight: 500; }
+  nav a:hover { text-decoration: underline; }
   h1 { margin: 0; font-size: 22px; letter-spacing: -0.01em; }
   h1 span { color: var(--muted); font-weight: 400; }
   .path {
@@ -182,8 +191,11 @@
 <body>
 <main>
   <header>
-    <h1>gumpet <span>settings</span></h1>
-    <p class="path" id="path"></p>
+    <div>
+      <h1>gumpet <span>settings</span></h1>
+      <p class="path" id="path"></p>
+    </div>
+    <nav><a href="/messages">Messages &rarr;</a></nav>
   </header>
 
   <div class="note err" id="auth" hidden>
@@ -308,6 +320,14 @@
         <p class="hint">Seconds. A message may override this when it is sent.</p>
       </div>
       <div class="row">
+        <label for="max-visible">Balloons at once</label>
+        <input type="number" id="max-visible" data-path="message.max_visible" data-kind="int" min="1" step="1">
+        <p class="hint">
+          Messages that arrive together are shown together, stacked above the
+          pet, up to this many. Raise it for a noisier pet.
+        </p>
+      </div>
+      <div class="row">
         <label for="max-width">Balloon width</label>
         <input type="number" id="max-width" data-path="message.max_width" data-kind="int" min="60" step="20">
         <p class="hint">How wide the balloon may grow before the text wraps, in pixels.</p>
@@ -329,6 +349,23 @@
           <button type="button" class="secondary" id="test-send">Send</button>
         </div>
         <p class="hint">Sends a message to the pet right now, using the settings it is currently running with.</p>
+      </div>
+    </section>
+
+    <section>
+      <h2>Message history</h2>
+      <div class="row">
+        <label for="history-max">Keep</label>
+        <input type="number" id="history-max" data-path="history.max" data-kind="int" min="1" step="10">
+        <p class="hint">
+          How many messages the <a href="/messages">messages page</a> remembers,
+          newest first.
+        </p>
+      </div>
+      <div class="row">
+        <label for="history-hours">For</label>
+        <input type="number" id="history-hours" data-path="history.hours" data-kind="float" min="0" step="1">
+        <p class="hint">Hours. 0 keeps them until the limit above is reached.</p>
       </div>
     </section>
 

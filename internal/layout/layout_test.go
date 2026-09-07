@@ -202,3 +202,81 @@ func TestClamp(t *testing.T) {
 		}
 	}
 }
+
+func TestStackBalloonsEmpty(t *testing.T) {
+	panel, points := StackBalloons(nil, 20, 4)
+	if panel != (Panel{}) || points != nil {
+		t.Errorf("StackBalloons(nil) = %+v, %v; want zero values", panel, points)
+	}
+}
+
+func TestStackBalloonsSingle(t *testing.T) {
+	panel, points := StackBalloons([]Size{{W: 200, H: 60}}, 20, 4)
+
+	if panel.W != 200 || panel.H != 60 {
+		t.Errorf("panel = %vx%v, want the balloon's 200x60", panel.W, panel.H)
+	}
+	if points[0] != (Point{}) {
+		t.Errorf("point = %+v, want the origin", points[0])
+	}
+}
+
+func TestStackBalloonsPilesUpwardsInOrder(t *testing.T) {
+	sizes := []Size{{W: 200, H: 60}, {W: 180, H: 40}, {W: 220, H: 80}}
+	const gap = 4.0
+
+	panel, points := StackBalloons(sizes, 20, gap)
+
+	// The first balloon is the one with the tail, so it has to be at the
+	// bottom of the stack.
+	for i := 1; i < len(sizes); i++ {
+		if bottom, firstTop := points[i].Y+sizes[i].H, points[0].Y; bottom > firstTop {
+			t.Errorf("balloon %d reaches down to %v, past the first balloon's top at %v", i, bottom, firstTop)
+		}
+	}
+	if got := points[0].Y + sizes[0].H; got != panel.H {
+		t.Errorf("the first balloon's bottom is at %v, want the bottom of the panel at %v", got, panel.H)
+	}
+	// Stacked in order, with the gap between each.
+	for i := 1; i < len(sizes); i++ {
+		want := points[i-1].Y - gap - sizes[i].H
+		if points[i].Y != want {
+			t.Errorf("balloon %d at y = %v, want %v", i, points[i].Y, want)
+		}
+	}
+}
+
+func TestStackBalloonsFansOutToBothSides(t *testing.T) {
+	sizes := make([]Size, 5)
+	for i := range sizes {
+		sizes[i] = Size{W: 100, H: 40}
+	}
+
+	_, points := StackBalloons(sizes, 20, 4)
+
+	// Relative to the first balloon, later ones alternate sides and move
+	// further out, which is what makes a burst look busy.
+	base := points[0].X
+	want := []float64{0, 20, -20, 40, -40}
+	for i, w := range want {
+		if got := points[i].X - base; got != w {
+			t.Errorf("balloon %d offset %v, want %v", i, got, w)
+		}
+	}
+}
+
+func TestStackBalloonsPanelContainsEveryBalloon(t *testing.T) {
+	sizes := []Size{{W: 200, H: 60}, {W: 320, H: 40}, {W: 120, H: 80}, {W: 260, H: 50}}
+
+	panel, points := StackBalloons(sizes, 25, 4)
+
+	for i, s := range sizes {
+		if points[i].X < 0 || points[i].Y < 0 {
+			t.Errorf("balloon %d at %+v, outside the panel", i, points[i])
+		}
+		if points[i].X+s.W > panel.W || points[i].Y+s.H > panel.H {
+			t.Errorf("balloon %d reaches (%v, %v), past the panel %vx%v",
+				i, points[i].X+s.W, points[i].Y+s.H, panel.W, panel.H)
+		}
+	}
+}

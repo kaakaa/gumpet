@@ -107,3 +107,63 @@ func Clamp(v, lo, hi float64) float64 {
 	}
 	return math.Min(math.Max(v, lo), hi)
 }
+
+// Size is a width and height in pixels.
+type Size struct {
+	W, H float64
+}
+
+// Point is a position in pixels.
+type Point struct {
+	X, Y float64
+}
+
+// StackBalloons piles balloons above the pet: the first at the bottom, where
+// the tail is, and each later one above it and shifted to one side. Messages
+// that arrive together are meant to look like a crowd talking at once, so the
+// stack deliberately zigzags rather than lining up.
+//
+// The returned points are the balloons' top-left corners within the panel.
+func StackBalloons(sizes []Size, offsetStep, gap float64) (Panel, []Point) {
+	if len(sizes) == 0 {
+		return Panel{}, nil
+	}
+
+	// Lay the stack out upwards from a baseline of zero. Y grows downwards, so
+	// everything above the first balloon lands on the negative side, and the
+	// whole thing is shifted back into place afterwards.
+	points := make([]Point, len(sizes))
+	y := 0.0
+	for i, s := range sizes {
+		y -= s.H
+		points[i] = Point{X: sideStep(i, offsetStep), Y: y}
+		y -= gap
+	}
+
+	minX, minY := points[0].X, points[0].Y
+	maxX, maxY := points[0].X+sizes[0].W, points[0].Y+sizes[0].H
+	for i, s := range sizes {
+		minX = math.Min(minX, points[i].X)
+		minY = math.Min(minY, points[i].Y)
+		maxX = math.Max(maxX, points[i].X+s.W)
+		maxY = math.Max(maxY, points[i].Y+s.H)
+	}
+	for i := range points {
+		points[i].X -= minX
+		points[i].Y -= minY
+	}
+	return Panel{W: maxX - minX, H: maxY - minY}, points
+}
+
+// sideStep fans the stack out to alternating sides: the first balloon square
+// over the pet, then one to the right, one to the left, then further out.
+func sideStep(i int, step float64) float64 {
+	if i == 0 {
+		return 0
+	}
+	out := float64((i+1)/2) * step
+	if i%2 == 0 {
+		return -out
+	}
+	return out
+}
