@@ -276,6 +276,29 @@ and every desktop gumpet runs on already has one.
 - The settings page is served by gumpet itself and loads nothing from the
   network, so it works offline.
 
+## Issues become pull requests
+
+Opening an issue starts [a workflow](.github/workflows/implement-issue.yml) that
+reads it, makes the change, and opens a **draft** pull request against it. The
+issue forms ask for the three things that decide an implementation — what it
+should do, why, and how you would know it works — and the last of those is what
+the change gets built against.
+
+It needs one of two repository secrets, and does nothing at all without one:
+
+| | |
+| ------------------------- | --- |
+| `CLAUDE_CODE_OAUTH_TOKEN` | For a Claude subscription. `claude setup-token` prints one |
+| `ANTHROPIC_API_KEY`       | For API billing |
+
+It only runs for issues opened by someone with write access, since the issue
+text drives an agent that can push here. Label an issue `no-auto` to keep it
+from running, or run the workflow by hand against an issue number to try again.
+
+Told to build something the issue does not describe well enough, it is meant to
+comment saying what it would need rather than guess — a guessed implementation
+costs more to review than none.
+
 ## Releasing
 
 Pushing a tag builds every platform and publishes the archives:
