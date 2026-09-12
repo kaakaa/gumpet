@@ -1,12 +1,19 @@
 # Turns an issue into a draft pull request.
 #
-# Needs one of these, or it fails at the last step saying which is missing:
+# Two separate things have to be set up, and the run fails at the last step
+# until both are:
 #
-#   the Claude GitHub App, installed on this repository from
-#     https://github.com/apps/claude — no secret needed, and the route for a
-#     Claude subscription
-#   CLAUDE_CODE_OAUTH_TOKEN, a repository secret from `claude setup-token`
-#   ANTHROPIC_API_KEY, a repository secret, for API billing
+#   1. The Claude GitHub App, installed on this repository from
+#      https://github.com/apps/claude. This is how the run authenticates to
+#      GitHub itself — reading the issue, pushing a branch, opening the PR.
+#
+#   2. One of these repository secrets, which is how it authenticates to
+#      Anthropic and how the tokens are billed:
+#        CLAUDE_CODE_OAUTH_TOKEN   from `claude setup-token`; bills to a
+#                                  Claude subscription
+#        ANTHROPIC_API_KEY         from the Claude Console; bills as API usage
+#
+# `/install-github-app` in Claude Code does both.
 name: implement issue
 
 on:
