@@ -284,12 +284,14 @@ issue forms ask for the three things that decide an implementation — what it
 should do, why, and how you would know it works — and the last of those is what
 the change gets built against.
 
-It needs one of two repository secrets, and does nothing at all without one:
+It needs to be able to authenticate, and fails at its last step saying so if it
+cannot. Any one of these does it:
 
 | | |
-| ------------------------- | --- |
-| `CLAUDE_CODE_OAUTH_TOKEN` | For a Claude subscription. `claude setup-token` prints one |
-| `ANTHROPIC_API_KEY`       | For API billing |
+| --- | --- |
+| The [Claude GitHub App](https://github.com/apps/claude) installed on the repository | Nothing else to set up, and the route for a Claude subscription |
+| A `CLAUDE_CODE_OAUTH_TOKEN` secret | From `claude setup-token` |
+| An `ANTHROPIC_API_KEY` secret | For API billing |
 
 It only runs for issues opened by someone with write access, since the issue
 text drives an agent that can push here. Label an issue `no-auto` to keep it
