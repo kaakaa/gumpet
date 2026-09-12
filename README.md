@@ -284,14 +284,22 @@ issue forms ask for the three things that decide an implementation — what it
 should do, why, and how you would know it works — and the last of those is what
 the change gets built against.
 
-It needs to be able to authenticate, and fails at its last step saying so if it
-cannot. Any one of these does it:
+Two separate things have to be set up, and the workflow fails at its last step
+until both are. Running `/install-github-app` in Claude Code does both at once.
 
-| | |
-| --- | --- |
-| The [Claude GitHub App](https://github.com/apps/claude) installed on the repository | Nothing else to set up, and the route for a Claude subscription |
-| A `CLAUDE_CODE_OAUTH_TOKEN` secret | From `claude setup-token` |
-| An `ANTHROPIC_API_KEY` secret | For API billing |
+1. **The [Claude GitHub App](https://github.com/apps/claude), installed on this
+   repository.** This is how the run authenticates to GitHub: reading the
+   issue, pushing a branch, opening the pull request.
+2. **A repository secret**, which is how it authenticates to Anthropic, and
+   which decides how the tokens are billed:
+
+   | | |
+   | --- | --- |
+   | `CLAUDE_CODE_OAUTH_TOKEN` | From `claude setup-token`. Bills to a Claude subscription |
+   | `ANTHROPIC_API_KEY` | From the Claude Console. Bills as API usage |
+
+Each run also spends GitHub Actions minutes for the runner it executes on,
+which is GitHub's billing rather than Anthropic's.
 
 It only runs for issues opened by someone with write access, since the issue
 text drives an agent that can push here. Label an issue `no-auto` to keep it
