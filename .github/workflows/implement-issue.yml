@@ -20,6 +20,9 @@ permissions:
   contents: write
   pull-requests: write
   issues: write
+  # The action asks for an OIDC token when it authenticates; without this it
+  # fails before it reaches the credentials.
+  id-token: write
 
 # One run per issue. A re-run supersedes a run still in flight rather than
 # racing it onto the same branch.
