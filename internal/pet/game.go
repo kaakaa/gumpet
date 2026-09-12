@@ -17,6 +17,7 @@ import (
 
 	"github.com/kaakaa/gumpet/internal/config"
 	"github.com/kaakaa/gumpet/internal/history"
+	"github.com/kaakaa/gumpet/internal/hover"
 	"github.com/kaakaa/gumpet/internal/layout"
 	"github.com/kaakaa/gumpet/internal/message"
 	"github.com/kaakaa/gumpet/internal/petpack"
@@ -99,9 +100,11 @@ type Game struct {
 	// menuIdle is how long the cursor has been away from the window, which is
 	// the only sign we get that the user has moved on.
 	menuIdle time.Duration
-	// hovered is whether the cursor is resting on the pet or on one of its
-	// balloons, which stops it so that either can be clicked.
+	// hovered is whether the cursor is holding the pet still so that it, or
+	// one of its balloons, can be clicked. [hover.Tracker] decides: a cursor
+	// merely lying where the pet wandered does not count.
 	hovered bool
+	cursor  hover.Tracker
 
 	started bool
 }
@@ -200,8 +203,7 @@ func (g *Game) stage() layout.Rect {
 // canRoam reports whether the pet should be walking. It carries on walking
 // while it talks — the balloons are drawn above it and travel with it — but
 // holds still while its menu is open, so the rows stay under the cursor, and
-// while the cursor is on it or on one of its balloons, so that a pet crossing
-// the screen at speed is still something you can aim at.
+// while someone is plainly reaching for it with the cursor.
 func (g *Game) canRoam() bool {
 	return g.menu == nil && !g.hovered
 }
