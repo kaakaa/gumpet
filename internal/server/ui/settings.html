@@ -212,6 +212,15 @@
     <section>
       <h2>Where the pet may go</h2>
       <div class="row">
+        <label for="display">Monitor</label>
+        <input type="number" id="display" data-path="stage.display" data-kind="int" min="1" step="1">
+        <p class="hint">
+          Which monitor to put the pet on, counting from 1. gumpet lists the
+          ones it found in its log when it starts. Takes effect on the next
+          start.
+        </p>
+      </div>
+      <div class="row">
         <label for="fullscreen">Roam the whole screen</label>
         <input type="checkbox" id="fullscreen" data-path="stage.fullscreen">
         <p class="hint">

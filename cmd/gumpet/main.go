@@ -88,6 +88,10 @@ func run() error {
 	served := make(chan error, 1)
 	go func() { served <- srv.Serve(ctx) }()
 
+	// The monitor list is the only way to know what stage.display should be
+	// set to, so say what was found whether or not it is about to be used.
+	log.Info("monitors", "found", pet.Monitors(), "using", cfg.Stage.Display)
+
 	applyWindowSettings(cfg)
 	game := pet.New(pet.Options{
 		Store:   store,
@@ -120,6 +124,7 @@ func run() error {
 // overlay. Its size and position are the pet's business, and are set on every
 // tick as the pet moves.
 func applyWindowSettings(cfg config.Config) {
+	pet.UseDisplay(cfg.Stage.Display)
 	ebiten.SetWindowTitle("gumpet")
 	ebiten.SetWindowDecorated(false)
 	ebiten.SetWindowResizingMode(ebiten.WindowResizingModeDisabled)

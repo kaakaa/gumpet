@@ -122,7 +122,8 @@ the file, comments and all. The settings worth knowing about:
 
 | Setting | Default | What it does |
 | ------- | ------- | ------------ |
-| `stage.fullscreen` | `false` | Let the pet roam the whole monitor |
+| `stage.display` | 1 | Which monitor to put the pet on, counting from 1 |
+| `stage.fullscreen` | `false` | Let the pet roam that monitor |
 | `stage.width` / `stage.height` | 520 × 360 | Otherwise, how big a patch of screen it keeps to |
 | `stage.anchor` | `bottom-right` | Which corner that patch sits in — or `custom` with `stage.x` / `stage.y` |
 | `behavior.mode` | `always` | `faded` dims the pet when idle, `on-message` hides it until something arrives |
@@ -156,6 +157,12 @@ the screen the pet is covering.
 
 The pet starts somewhere random on the stage each time gumpet runs, so a
 restart does not always put it back in the same corner.
+
+With more than one monitor, `stage.display` picks which one it lives on,
+counting from 1 in the order the system reports them — gumpet lists what it
+found in its log at startup. It stays on that one: Ebitengine reports each
+monitor's size but not where it sits relative to the others, so there is no
+coordinate space in which a pet could walk from one screen to the next.
 
 The **stage** is the part of the monitor the pet is allowed into, not a window.
 gumpet's window is only as big as the pet and whatever it is saying, and it

@@ -8,6 +8,7 @@
 package pet
 
 import (
+	"fmt"
 	"log/slog"
 	"math"
 	"os"
@@ -192,6 +193,38 @@ func (g *Game) readMonitor() error {
 	return nil
 }
 
+// UseDisplay moves the window to the monitor the settings name. It is called
+// before the game starts as well as when the setting changes, because
+// Ebitengine accepts the choice either side of Run.
+//
+// It reports whether it asked for a different one. Two monitors of the same
+// size are indistinguishable to readMonitor, so the caller has to reshape on
+// the strength of this rather than wait to notice a new size.
+func UseDisplay(want int) bool {
+	monitors := ebiten.AppendMonitors(nil)
+	if len(monitors) == 0 {
+		return false
+	}
+	chosen := monitors[layout.Display(want, len(monitors))]
+	if chosen == ebiten.Monitor() {
+		return false
+	}
+	ebiten.SetMonitor(chosen)
+	return true
+}
+
+// Monitors names the monitors the system reports, for the log: the display
+// setting is an index into this list, and there is otherwise no way to know
+// what to set it to.
+func Monitors() []string {
+	var names []string
+	for i, m := range ebiten.AppendMonitors(nil) {
+		w, h := m.Size()
+		names = append(names, fmt.Sprintf("%d=%s (%dx%d)", i+1, m.Name(), w, h))
+	}
+	return names
+}
+
 func (g *Game) reshapeWalker() {
 	g.walker.Reshape(g.cfg.Behavior.Roam, g.stage(), g.petWidth(), g.petHeight(), g.cfg.Behavior.Speed)
 }
@@ -242,6 +275,13 @@ func (g *Game) applyConfig(cfg config.Config) {
 			g.pack = pack
 			g.resetAnimation()
 		}
+	}
+
+	if cfg.Stage.Display != old.Stage.Display && UseDisplay(cfg.Stage.Display) {
+		// The monitor moved to may be the same size as the one left behind,
+		// which readMonitor would take for nothing having changed.
+		g.monitor = layout.Rect{}
+		g.started = false
 	}
 
 	ebiten.SetWindowFloating(cfg.Window.AlwaysOnTop)
