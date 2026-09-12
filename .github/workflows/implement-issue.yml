@@ -1,8 +1,12 @@
 # Turns an issue into a draft pull request.
 #
-# Needs one of these repository secrets, or it does nothing:
-#   CLAUDE_CODE_OAUTH_TOKEN   for a Claude subscription (`claude setup-token`)
-#   ANTHROPIC_API_KEY         for API billing
+# Needs one of these, or it fails at the last step saying which is missing:
+#
+#   the Claude GitHub App, installed on this repository from
+#     https://github.com/apps/claude — no secret needed, and the route for a
+#     Claude subscription
+#   CLAUDE_CODE_OAUTH_TOKEN, a repository secret from `claude setup-token`
+#   ANTHROPIC_API_KEY, a repository secret, for API billing
 name: implement issue
 
 on:
