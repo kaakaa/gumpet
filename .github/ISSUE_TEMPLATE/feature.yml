@@ -1,0 +1,81 @@
+name: Feature
+description: Something gumpet should do that it does not
+title: "feature: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The first three boxes are what building this actually needs. The rest
+        are worth a line each when you know the answer, and fine to skip when
+        you do not.
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What should it do?
+      description: A sentence or two, from the outside — what you would see the pet, the pages or the CLI doing.
+      placeholder: Dragging an image file onto the pet should make it use that image.
+    validations:
+      required: true
+
+  - type: textarea
+    id: why
+    attributes:
+      label: Why?
+      description: What you were doing when you wanted it. The reason usually settles the design better than the request does.
+      placeholder: Changing the artwork means finding the path, opening the settings page and pasting it in. I have the file right there in Finder.
+    validations:
+      required: true
+
+  - type: textarea
+    id: done
+    attributes:
+      label: How would you know it works?
+      description: |
+        The steps you would take to check, and what you would expect to see. Be
+        concrete: this is what the change gets built against and tested for.
+      placeholder: |
+        1. Start gumpet
+        2. Drag a PNG from Finder onto the gopher
+        3. It draws that image from then on, and pet.source in the config file points at it
+        4. Restart: still that image
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Which part of gumpet?
+      description: A guess is fine. It only sets where to start looking.
+      options:
+        - The pet itself — drawing, roaming, balloons, the menu
+        - Messages — the queue, the history, gumpetctl
+        - The web pages — settings or messages
+        - Configuration — a new setting, or how one behaves
+        - Build, release or packaging
+        - Not sure
+    validations:
+      required: true
+
+  - type: input
+    id: setting
+    attributes:
+      label: Does it need a setting?
+      description: If so, what would you call it and what should the default be? Leave empty if it should just work.
+      placeholder: "pet.accept_drops, default true"
+
+  - type: textarea
+    id: bounds
+    attributes:
+      label: What it should not touch
+      description: |
+        Anything nearby that should be left alone, or a version of this you do
+        *not* want. Keeps the change from growing sideways.
+      placeholder: Dropping a file should not also move the pet there, and should leave the roaming settings alone.
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else
+      description: Sketches, screenshots, a link to how another app does it, an existing setting it should resemble.
