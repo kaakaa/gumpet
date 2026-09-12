@@ -1,0 +1,72 @@
+name: Bug
+description: Something gumpet does that it should not
+title: "bug: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        A way to reproduce it is worth more than everything else put together —
+        most of gumpet cannot be watched from a test, so the steps are how a fix
+        gets checked.
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you saw, and what you expected to see instead.
+      placeholder: |
+        The pet walks off the right edge of the screen and never comes back.
+        I expected it to turn round at the edge like it does on the left.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: How do you make it happen?
+      description: From a fresh start, if you can. Say whether it happens every time or now and then.
+      placeholder: |
+        1. Set stage.fullscreen to true and behavior.roam to wander
+        2. Start gumpet on the external monitor
+        3. Wait a minute or so
+        Happens every time.
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Which gumpet?
+      description: "`gumpet -version`, or the commit you built."
+      placeholder: v0.1.0
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Where?
+      options:
+        - macOS (Apple Silicon)
+        - macOS (Intel)
+        - Windows
+        - Linux
+    validations:
+      required: true
+
+  - type: textarea
+    id: config
+    attributes:
+      label: Settings
+      description: |
+        The part of your config file that matters, or all of it. Remember to
+        take out `server.token` if you have set one.
+      render: yaml
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: What it printed
+      description: gumpet logs to the terminal it was started from. `GUMPET_DEBUG=1` also outlines the window, which helps for anything about size or position.
+      render: shell

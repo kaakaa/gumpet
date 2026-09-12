@@ -1,0 +1,3 @@
+# The forms exist so that an issue carries enough to act on without a round of
+# questions. A blank issue rarely does, so it is off.
+blank_issues_enabled: false
