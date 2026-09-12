@@ -195,11 +195,16 @@ func (g *Game) handleInput(dt time.Duration) error {
 	// slide across it.
 	onPet := g.overPet(px, py)
 	onBalloon := g.balloonAt(px, py)
-	// winX and winY are what the window was last actually told to be, rather
-	// than the unrounded figure it was computed from, so adding them back
-	// recovers the position the cursor is really at.
+	// Ask the window where it is now rather than using what it was last told
+	// to be: the cursor is reported relative to where it actually sits, and
+	// this runs a step before the window is moved again. A tick of difference
+	// between the two is a tick of the pet's speed, which at any brisk setting
+	// is more than the threshold below — it would read as the cursor lurching
+	// every time the pet started or stopped.
+	winX, winY := ebiten.WindowPosition()
 	g.hovered = g.cursor.Update(
-		float64(g.winX)+px, float64(g.winY)+py,
+		float64(winX)+px, float64(winY)+py,
+		g.overWindow(px, py),
 		onPet || onBalloon >= 0,
 		dt,
 	)

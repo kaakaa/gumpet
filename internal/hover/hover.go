@@ -24,34 +24,54 @@ const IdleLimit = 3 * time.Second
 // MoveThreshold is how far the cursor must travel to count as having moved, in
 // logical pixels.
 //
-// The window follows the pet around the screen, and the cursor position is
-// read back through that moving frame, so a perfectly still cursor reports a
-// pixel of jitter as the window shifts under it. Anything smaller than this is
-// that jitter rather than a hand.
+// The cursor is reported relative to a window that moves with the pet, so its
+// position on the screen is a sum of two numbers and carries the rounding of
+// both. Anything smaller than this is that rounding rather than a hand.
 const MoveThreshold = 2
 
-// Tracker watches the cursor across ticks. Its zero value is ready to use and
-// treats the first position it sees as a movement, so a cursor already resting
-// on the pet when gumpet starts still gets its moment.
+// Tracker watches the cursor across ticks. Its zero value is ready to use.
 type Tracker struct {
 	x, y  float64
 	known bool
 	idle  time.Duration
 }
 
-// Update takes the cursor's position on the *screen* — not within the window,
-// which moves with the pet — along with whether it is over something worth
-// stopping for, and how long has passed. It reports whether the pet should
-// hold still.
-func (t *Tracker) Update(x, y float64, over bool, dt time.Duration) bool {
-	if !t.known || abs(x-t.x) >= MoveThreshold || abs(y-t.y) >= MoveThreshold {
+// Update reports whether the pet should hold still. It takes the cursor's
+// position on the *screen* — not within the window, which moves with the pet —
+// whether the cursor is inside that window at all, whether it is over
+// something worth stopping for, and how long has passed.
+//
+// The window matters because the system reports the cursor relative to it and
+// stops updating that once the cursor leaves. What comes back from outside is
+// wherever the cursor was when it left, which added to a window that has since
+// moved looks exactly like a cursor being swept across the screen. So a
+// reading is only believed while the cursor is inside.
+func (t *Tracker) Update(x, y float64, inside, over bool, dt time.Duration) bool {
+	switch {
+	case !inside:
+		// Nothing can be read out there, and nothing needs to be: a cursor
+		// outside the window is not on the pet. Counting the time as stillness
+		// is what makes a cursor that has been lying somewhere for a while fail
+		// to catch the pet when the pet finally walks over it.
+		t.known = false
+		t.idle += dt
+
+	case !t.known:
+		// First reading since the cursor came back into view. However far it is
+		// from where it was last seen, crossing that gap was not something this
+		// tick watched happen, so it is not movement.
 		t.x, t.y = x, y
 		t.known = true
+		t.idle += dt
+
+	case abs(x-t.x) >= MoveThreshold || abs(y-t.y) >= MoveThreshold:
+		t.x, t.y = x, y
 		t.idle = 0
-	} else {
+
+	default:
 		t.idle += dt
 	}
-	return over && t.idle < IdleLimit
+	return inside && over && t.idle < IdleLimit
 }
 
 // Reset forgets what the cursor was doing, for when it stops being watched at
