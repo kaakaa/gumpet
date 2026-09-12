@@ -199,6 +199,13 @@ The list is kept in memory, so it starts empty every time gumpet runs.
 `history.max` and `history.hours` decide how much of it is kept; whichever
 limit bites first wins.
 
+## Claude Code
+
+[contrib/claude-code](contrib/claude-code) has a hook that points
+[Claude Code](https://claude.com/claude-code) at your pet: the gopher asks you
+Claude's questions and tells you when it has finished working, so you can leave
+the terminal and still know when you are needed.
+
 ## The menu
 
 Clicking the pet opens a menu with:
