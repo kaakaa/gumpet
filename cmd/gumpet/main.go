@@ -84,13 +84,14 @@ func run() error {
 	store := settings.New(cfg, *configPath)
 	hist := history.New(cfg.History)
 	inbox := make(chan message.Message, inboxSize)
-	srv := server.New(store, hist, inbox, log)
+	monitors := pet.Monitors()
+	srv := server.New(store, hist, monitors, inbox, log)
 	served := make(chan error, 1)
 	go func() { served <- srv.Serve(ctx) }()
 
-	// The monitor list is the only way to know what stage.display should be
-	// set to, so say what was found whether or not it is about to be used.
-	log.Info("monitors", "found", pet.Monitors(), "using", cfg.Stage.Display)
+	for _, m := range monitors {
+		log.Info("monitor", "display", m.Label())
+	}
 
 	applyWindowSettings(cfg)
 	game := pet.New(pet.Options{

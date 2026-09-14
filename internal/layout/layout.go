@@ -167,21 +167,3 @@ func sideStep(i int, step float64) float64 {
 	}
 	return out
 }
-
-// Display turns the stage.display setting into an index into the monitors the
-// system reports.
-//
-// The setting counts from one, the way the monitors are numbered in a display
-// arrangement rather than the way a slice is. A machine can lose a monitor
-// between one run and the next, so a number that no longer names one falls
-// back to the first rather than failing: a pet on the wrong screen is a
-// nuisance, a pet that will not start is worse.
-func Display(want, available int) int {
-	if available <= 0 {
-		return 0
-	}
-	if want < 1 || want > available {
-		return 0
-	}
-	return want - 1
-}

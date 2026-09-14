@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/kaakaa/gumpet/internal/config"
+	"github.com/kaakaa/gumpet/internal/display"
 	"github.com/kaakaa/gumpet/internal/fontfile"
 	"github.com/kaakaa/gumpet/internal/history"
 	"github.com/kaakaa/gumpet/internal/message"
@@ -38,8 +39,11 @@ type Server struct {
 	store *settings.Store
 	// history records every message, and whether the pet has said it yet.
 	history *history.Store
-	out     chan<- message.Message
-	log     *slog.Logger
+	// monitors is what the machine reported at startup, so the settings page
+	// can name the displays rather than asking for a number on faith.
+	monitors []display.Monitor
+	out      chan<- message.Message
+	log      *slog.Logger
 
 	server *http.Server
 	// addr is fixed when Serve binds, so that editing server.addr cannot leave
@@ -55,9 +59,17 @@ type messageRequest struct {
 }
 
 // New builds a server that publishes received messages to out, records them in
-// hist, and saves settings through store.
-func New(store *settings.Store, hist *history.Store, out chan<- message.Message, log *slog.Logger) *Server {
-	s := &Server{store: store, history: hist, out: out, log: log, addr: store.Get().Server.Addr}
+// hist, and saves settings through store. monitors is what the settings page
+// offers as the choice of display.
+func New(store *settings.Store, hist *history.Store, monitors []display.Monitor, out chan<- message.Message, log *slog.Logger) *Server {
+	s := &Server{
+		store:    store,
+		history:  hist,
+		monitors: monitors,
+		out:      out,
+		log:      log,
+		addr:     store.Get().Server.Addr,
+	}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{$}", s.page("ui/settings.html"))
@@ -139,9 +151,14 @@ func (s *Server) handleListMessages(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleGetConfig(w http.ResponseWriter, r *http.Request) {
+	monitors := s.monitors
+	if monitors == nil {
+		monitors = []display.Monitor{}
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"config": s.config(),
-		"path":   s.store.Path(),
+		"config":   s.config(),
+		"path":     s.store.Path(),
+		"monitors": monitors,
 		// Anything the running process cannot change on the fly.
 		"restart_required": []string{"server.addr", "window.skip_taskbar"},
 	})
