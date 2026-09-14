@@ -8,6 +8,7 @@
 package pet
 
 import (
+	"fmt"
 	"log/slog"
 	"math"
 	"os"
@@ -16,6 +17,7 @@ import (
 	"github.com/hajimehoshi/ebiten/v2"
 
 	"github.com/kaakaa/gumpet/internal/config"
+	"github.com/kaakaa/gumpet/internal/display"
 	"github.com/kaakaa/gumpet/internal/history"
 	"github.com/kaakaa/gumpet/internal/hover"
 	"github.com/kaakaa/gumpet/internal/layout"
@@ -107,6 +109,9 @@ type Game struct {
 	cursor  hover.Tracker
 
 	started bool
+	// settled says the window has reached the monitor it was asked for, and is
+	// only kept so that arriving is logged once rather than every tick.
+	settled bool
 }
 
 // New builds the game.
@@ -178,6 +183,9 @@ func (g *Game) Update() error {
 // what defines the stage. Ebitengine reports window positions relative to the
 // current monitor's top-left corner, so that corner is the origin throughout.
 func (g *Game) readMonitor() error {
+	if !g.onWantedMonitor() {
+		return nil
+	}
 	w, h := ebiten.Monitor().Size()
 	if w == 0 || h == 0 {
 		return nil
@@ -190,6 +198,57 @@ func (g *Game) readMonitor() error {
 	g.started = true
 	g.reshapeWalker()
 	return nil
+}
+
+// Monitors describes the displays attached to the machine, in the order
+// stage.display numbers them.
+func Monitors() []display.Monitor {
+	var found []display.Monitor
+	for i, m := range ebiten.AppendMonitors(nil) {
+		w, h := m.Size()
+		found = append(found, display.Monitor{
+			Number: i + 1,
+			Name:   m.Name(),
+			Width:  w,
+			Height: h,
+		})
+	}
+	return found
+}
+
+// UseDisplay asks for the window to be put on the monitor the settings name.
+// Ebitengine accepts the choice either side of Run, storing it for when the
+// window is made or moving the window there if it already exists.
+func UseDisplay(want int) {
+	monitors := ebiten.AppendMonitors(nil)
+	if len(monitors) == 0 {
+		return
+	}
+	ebiten.SetMonitor(monitors[display.Pick(want, len(monitors))])
+}
+
+// wantedMonitor is the monitor the settings name, or nil when they name none
+// that exists.
+func (g *Game) wantedMonitor() *ebiten.MonitorType {
+	monitors := ebiten.AppendMonitors(nil)
+	if len(monitors) == 0 {
+		return nil
+	}
+	return monitors[display.Pick(g.cfg.Stage.Display, len(monitors))]
+}
+
+// onWantedMonitor reports whether the window has arrived on the monitor the
+// settings name.
+//
+// Moving there is not instant, and Ebitengine remembers which monitor a window
+// is on for a second at a time. Until it catches up, every coordinate gumpet
+// computes would be read against the monitor being left rather than the one
+// being arrived at — and since the window is repositioned on every tick, that
+// is enough to drag it straight back. So nothing is positioned until the move
+// has plainly landed.
+func (g *Game) onWantedMonitor() bool {
+	want := g.wantedMonitor()
+	return want == nil || want == ebiten.Monitor()
 }
 
 func (g *Game) reshapeWalker() {
@@ -242,6 +301,15 @@ func (g *Game) applyConfig(cfg config.Config) {
 			g.pack = pack
 			g.resetAnimation()
 		}
+	}
+
+	if cfg.Stage.Display != old.Stage.Display {
+		UseDisplay(cfg.Stage.Display)
+		// The monitor moved to may be the same size as the one left behind,
+		// which readMonitor would take for nothing having changed.
+		g.monitor = layout.Rect{}
+		g.started = false
+		g.settled = false
 	}
 
 	ebiten.SetWindowFloating(cfg.Window.AlwaysOnTop)
@@ -408,6 +476,14 @@ func (g *Game) activePanel() layout.Panel {
 // placeWindow sizes the window around the pet and its panel and moves it to
 // wherever the pet has walked to.
 func (g *Game) placeWindow() {
+	if !g.onWantedMonitor() {
+		return
+	}
+	if !g.settled {
+		g.settled = true
+		g.log.Info("on monitor", "name", ebiten.Monitor().Name(),
+			"size", fmt.Sprintf("%.0fx%.0f", g.monitor.W, g.monitor.H))
+	}
 	petX, petY := g.walker.Pos()
 	g.win = layout.PlaceWindow(petX, petY, g.petWidth(), g.petHeight(), g.activePanel(), panelGap, g.monitor)
 

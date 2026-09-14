@@ -13,10 +13,18 @@ import (
 	"time"
 
 	"github.com/kaakaa/gumpet/internal/config"
+	"github.com/kaakaa/gumpet/internal/display"
 	"github.com/kaakaa/gumpet/internal/history"
 	"github.com/kaakaa/gumpet/internal/message"
 	"github.com/kaakaa/gumpet/internal/settings"
 )
+
+// testMonitors stands in for what a machine reports, so the settings page has
+// displays to name.
+var testMonitors = []display.Monitor{
+	{Number: 1, Name: "DELL U4320Q", Width: 3200, Height: 1800},
+	{Number: 2, Name: "ASUS PB278", Width: 2560, Height: 1440},
+}
 
 func newTestServer(t *testing.T, srv config.Server, buffer int) (*Server, chan message.Message) {
 	t.Helper()
@@ -31,7 +39,7 @@ func newTestServerWithConfig(t *testing.T, cfg config.Config, buffer int) (*Serv
 	out := make(chan message.Message, buffer)
 	store := settings.New(cfg, filepath.Join(t.TempDir(), "config.yaml"))
 	updates := store.Subscribe(4)
-	srv := New(store, history.New(cfg.History), out, slog.New(slog.DiscardHandler))
+	srv := New(store, history.New(cfg.History), testMonitors, out, slog.New(slog.DiscardHandler))
 	return srv, out, updates
 }
 
@@ -321,7 +329,7 @@ func TestTheSettingsPageSeesAChangeMadeElsewhere(t *testing.T) {
 	cfg := config.Default()
 	out := make(chan message.Message, 1)
 	store := settings.New(cfg, filepath.Join(t.TempDir(), "config.yaml"))
-	s := New(store, history.New(cfg.History), out, slog.New(slog.DiscardHandler))
+	s := New(store, history.New(cfg.History), testMonitors, out, slog.New(slog.DiscardHandler))
 
 	// Stand in for the pet's menu flipping a toggle.
 	if err := store.Update(func(c *config.Config) { c.Behavior.Roam = config.RoamPerimeter }); err != nil {
@@ -346,7 +354,7 @@ func TestTheSettingsPageSeesAChangeMadeElsewhere(t *testing.T) {
 func TestAPartialSaveDoesNotUndoAChangeMadeElsewhere(t *testing.T) {
 	out := make(chan message.Message, 1)
 	store := settings.New(config.Default(), filepath.Join(t.TempDir(), "config.yaml"))
-	s := New(store, history.New(config.Default().History), out, slog.New(slog.DiscardHandler))
+	s := New(store, history.New(config.Default().History), testMonitors, out, slog.New(slog.DiscardHandler))
 
 	// The pet's menu turns on "hide until a message" after the page loaded.
 	if err := store.Update(func(c *config.Config) { c.Behavior.Mode = config.ModeOnMessage }); err != nil {
@@ -425,7 +433,7 @@ func TestARecordedMessageIsMarkedShown(t *testing.T) {
 	cfg := config.Default()
 	store := settings.New(cfg, filepath.Join(t.TempDir(), "config.yaml"))
 	hist := history.New(cfg.History)
-	s := New(store, hist, out, slog.New(slog.DiscardHandler))
+	s := New(store, hist, testMonitors, out, slog.New(slog.DiscardHandler))
 
 	post(t, s, "text/plain", "hello", nil)
 
@@ -470,7 +478,7 @@ func TestSavingHistoryLimitsPrunesStraightAway(t *testing.T) {
 	cfg := config.Default()
 	store := settings.New(cfg, filepath.Join(t.TempDir(), "config.yaml"))
 	hist := history.New(cfg.History)
-	s := New(store, hist, out, slog.New(slog.DiscardHandler))
+	s := New(store, hist, testMonitors, out, slog.New(slog.DiscardHandler))
 
 	for range 5 {
 		post(t, s, "text/plain", "hello", nil)
@@ -504,5 +512,37 @@ func TestListingMessagesRequiresTheToken(t *testing.T) {
 
 	if rec := do(t, s, http.MethodGet, "/api/v1/messages", "", "", nil); rec.Code != http.StatusUnauthorized {
 		t.Errorf("status = %d, want %d", rec.Code, http.StatusUnauthorized)
+	}
+}
+
+func TestConfigCarriesTheMonitorsToChooseFrom(t *testing.T) {
+	s, _, _ := newTestServerWithConfig(t, config.Default(), 1)
+
+	rec := do(t, s, http.MethodGet, "/api/v1/config", "", "", nil)
+	var body struct {
+		Monitors []display.Monitor `json:"monitors"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+
+	if len(body.Monitors) != len(testMonitors) {
+		t.Fatalf("got %d monitors, want %d", len(body.Monitors), len(testMonitors))
+	}
+	if body.Monitors[1].Name != "ASUS PB278" || body.Monitors[1].Number != 2 {
+		t.Errorf("second monitor = %+v, want the ASUS numbered 2", body.Monitors[1])
+	}
+}
+
+// A machine with nothing to report must still give the page an array to read,
+// not a null it would have to guard against.
+func TestConfigCarriesAnEmptyListRatherThanNull(t *testing.T) {
+	out := make(chan message.Message, 1)
+	store := settings.New(config.Default(), filepath.Join(t.TempDir(), "config.yaml"))
+	s := New(store, history.New(config.Default().History), nil, out, slog.New(slog.DiscardHandler))
+
+	rec := do(t, s, http.MethodGet, "/api/v1/config", "", "", nil)
+	if !strings.Contains(rec.Body.String(), `"monitors":[]`) {
+		t.Errorf("monitors is not an empty array: %s", rec.Body)
 	}
 }
