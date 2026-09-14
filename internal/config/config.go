@@ -131,8 +131,12 @@ type Window struct {
 // Stage is the area of the monitor the pet is allowed to move around in. It is
 // not the window: gumpet's window hugs the pet and follows it around the stage.
 type Stage struct {
-	// Fullscreen lets the pet roam the whole monitor, ignoring the size and
-	// placement below.
+	// Display is which monitor to put the pet on, counting from one in the
+	// order the system reports them. A number that names no monitor falls back
+	// to the first.
+	Display int `yaml:"display" json:"display"`
+	// Fullscreen lets the pet roam that monitor entirely, ignoring the size
+	// and placement below.
 	Fullscreen bool   `yaml:"fullscreen" json:"fullscreen"`
 	Width      int    `yaml:"width" json:"width"`
 	Height     int    `yaml:"height" json:"height"`
@@ -216,6 +220,7 @@ func Default() Config {
 			SkipTaskbar:  true,
 		},
 		Stage: Stage{
+			Display:    1,
 			Fullscreen: false,
 			Width:      520,
 			Height:     360,
@@ -283,6 +288,9 @@ func (c Config) Validate() error {
 	}
 	if !validAnchor(c.Stage.Anchor) {
 		return fmt.Errorf("stage.anchor %q is not one of top-left, top-right, bottom-left, bottom-right, center, custom", c.Stage.Anchor)
+	}
+	if c.Stage.Display < 1 {
+		return fmt.Errorf("stage.display counts from 1, got %d", c.Stage.Display)
 	}
 	if c.Stage.Width <= 0 || c.Stage.Height <= 0 {
 		return fmt.Errorf("stage.width and stage.height must be positive, got %dx%d", c.Stage.Width, c.Stage.Height)

@@ -212,6 +212,11 @@
     <section>
       <h2>Where the pet may go</h2>
       <div class="row">
+        <label for="display">Monitor</label>
+        <select id="display" data-path="stage.display" data-kind="int"></select>
+        <p class="hint">The display the pet lives on. It stays on that one.</p>
+      </div>
+      <div class="row">
         <label for="fullscreen">Roam the whole screen</label>
         <input type="checkbox" id="fullscreen" data-path="stage.fullscreen">
         <p class="hint">
@@ -499,6 +504,31 @@
 
   function status(text) { $("status").textContent = text; }
 
+  // The monitors are whatever the machine reported when gumpet started, so the
+  // choice is a list of displays by name rather than a number to be guessed at.
+  function fillMonitors(monitors, chosen) {
+    var select = $("display");
+    select.textContent = "";
+
+    (monitors || []).forEach(function (m) {
+      var option = document.createElement("option");
+      option.value = m.number;
+      option.textContent = m.number + ". " + m.name + " (" + m.width + "\u00d7" + m.height + ")";
+      select.appendChild(option);
+    });
+
+    // A setting naming a monitor that is no longer attached still has to show
+    // as itself, or saving anything else would quietly move the pet.
+    if (!Array.prototype.some.call(select.options, function (o) {
+      return parseInt(o.value, 10) === chosen;
+    })) {
+      var missing = document.createElement("option");
+      missing.value = chosen;
+      missing.textContent = chosen + ". (not attached)";
+      select.appendChild(missing);
+    }
+  }
+
   function fill(cfg) {
     fields.forEach(function (el) {
       var value = get(cfg, el.dataset.path);
@@ -584,6 +614,7 @@
   function adopt(data) {
     loaded = data.config;
     $("path").textContent = data.path;
+    fillMonitors(data.monitors, loaded.stage.display);
     if (data.restart_required && data.restart_required.length) {
       document.querySelectorAll("[data-restart]").forEach(function (el) {
         el.title = "Takes effect the next time gumpet starts";

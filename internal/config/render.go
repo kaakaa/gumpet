@@ -37,7 +37,11 @@ window:
 # window is only as big as the pet and follows it around the stage, so the
 # stage itself costs you no screen space.
 stage:
-  # Let the pet roam the whole monitor, ignoring everything below.
+  # Which monitor to put the pet on, counting from 1 in the order the system
+  # reports them. gumpet lists what it found in its log at startup. A number
+  # that names no monitor falls back to the first.
+  display: {{ .Stage.Display }}
+  # Let the pet roam that monitor entirely, ignoring everything below.
   fullscreen: {{ .Stage.Fullscreen }}
   width: {{ .Stage.Width }}
   height: {{ .Stage.Height }}

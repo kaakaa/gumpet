@@ -84,9 +84,14 @@ func run() error {
 	store := settings.New(cfg, *configPath)
 	hist := history.New(cfg.History)
 	inbox := make(chan message.Message, inboxSize)
-	srv := server.New(store, hist, inbox, log)
+	monitors := pet.Monitors()
+	srv := server.New(store, hist, monitors, inbox, log)
 	served := make(chan error, 1)
 	go func() { served <- srv.Serve(ctx) }()
+
+	for _, m := range monitors {
+		log.Info("monitor", "display", m.Label())
+	}
 
 	applyWindowSettings(cfg)
 	game := pet.New(pet.Options{
@@ -120,6 +125,7 @@ func run() error {
 // overlay. Its size and position are the pet's business, and are set on every
 // tick as the pet moves.
 func applyWindowSettings(cfg config.Config) {
+	pet.UseDisplay(cfg.Stage.Display)
 	ebiten.SetWindowTitle("gumpet")
 	ebiten.SetWindowDecorated(false)
 	ebiten.SetWindowResizingMode(ebiten.WindowResizingModeDisabled)
