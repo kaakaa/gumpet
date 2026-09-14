@@ -181,16 +181,33 @@ const menuAutoCloseAfter = 3 * time.Second
 func (g *Game) handleInput(dt time.Duration) error {
 	if g.passthrough {
 		g.menu, g.hovered = nil, false
+		g.cursor.Reset()
 		return nil
 	}
 
 	cx, cy := ebiten.CursorPosition()
 	px, py := float64(cx)/g.deviceScale, float64(cy)/g.deviceScale
+
 	// Aiming at either the pet or one of its balloons brings it to a halt, so
-	// that neither is a moving target.
+	// that neither is a moving target. Whether anyone is aiming is judged from
+	// the cursor's position on the screen rather than within the window: the
+	// window travels with the pet, so a cursor nobody has touched appears to
+	// slide across it.
 	onPet := g.overPet(px, py)
 	onBalloon := g.balloonAt(px, py)
-	g.hovered = onPet || onBalloon >= 0
+	// Ask the window where it is now rather than using what it was last told
+	// to be: the cursor is reported relative to where it actually sits, and
+	// this runs a step before the window is moved again. A tick of difference
+	// between the two is a tick of the pet's speed, which at any brisk setting
+	// is more than the threshold below — it would read as the cursor lurching
+	// every time the pet started or stopped.
+	winX, winY := ebiten.WindowPosition()
+	g.hovered = g.cursor.Update(
+		float64(winX)+px, float64(winY)+py,
+		g.overWindow(px, py),
+		onPet || onBalloon >= 0,
+		dt,
+	)
 
 	if g.menu != nil {
 		if g.overWindow(px, py) {
