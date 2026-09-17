@@ -10,6 +10,8 @@ import (
 	"github.com/hajimehoshi/ebiten/v2/vector"
 
 	"github.com/kaakaa/gumpet/internal/layout"
+	"github.com/kaakaa/gumpet/internal/message"
+	"github.com/kaakaa/gumpet/internal/richtext"
 )
 
 // Balloon and menu geometry, in logical pixels.
@@ -23,6 +25,10 @@ const (
 	// so that several at once read as a crowd rather than a list.
 	balloonSideStep = 26.0
 	balloonStackGap = 5.0
+	// titleGap separates a message's heading from its text.
+	titleGap = 3.0
+	// underlineDrop is how far below the baseline box a link's underline sits.
+	underlineDrop = 1.0
 )
 
 var (
@@ -33,32 +39,102 @@ var (
 	hoverColor  = color.NRGBA{R: 0x00, G: 0xad, B: 0xd8, A: 0x33}
 	ruleColor   = color.NRGBA{R: 0x00, G: 0x00, B: 0x00, A: 0x22}
 	debugBorder = color.NRGBA{R: 0xff, G: 0x00, B: 0x00, A: 0x66}
+	linkColor   = color.NRGBA{R: 0x00, G: 0x5f, B: 0xa8, A: 0xff}
 )
+
+// levelColors give each level a border for its balloon and a colour for its
+// heading. Info keeps the ordinary border, so a message that says nothing
+// about itself looks exactly as it always has.
+var levelColors = map[message.Level]struct{ border, accent color.NRGBA }{
+	message.LevelInfo:    {panelBorder, mutedColor},
+	message.LevelSuccess: {color.NRGBA{R: 0x1e, G: 0x7a, B: 0x43, A: 0xff}, color.NRGBA{R: 0x16, G: 0x65, B: 0x3a, A: 0xff}},
+	message.LevelWarn:    {color.NRGBA{R: 0xb5, G: 0x7d, B: 0x11, A: 0xff}, color.NRGBA{R: 0x8a, G: 0x5a, B: 0x10, A: 0xff}},
+	message.LevelError:   {color.NRGBA{R: 0xc0, G: 0x2c, B: 0x2c, A: 0xff}, color.NRGBA{R: 0x9b, G: 0x1c, B: 0x1c, A: 0xff}},
+}
+
+func colorsFor(level message.Level) (border, accent color.NRGBA) {
+	c, ok := levelColors[level]
+	if !ok {
+		c = levelColors[message.LevelInfo]
+	}
+	return c.border, c.accent
+}
 
 // balloon is a message wrapped and measured, ready to draw.
 type balloon struct {
-	lines []string
+	// title is the heading above the text, empty for most messages.
+	title []richtext.Line
+	lines []richtext.Line
 	// width and height include the padding around the text.
 	width, height float64
 	textW, textH  float64
+	// titleH is the height of the heading and the gap under it, or zero.
+	titleH float64
+	// lineH is the baseline-to-baseline distance the lines were laid out at,
+	// kept so that a click can be turned back into a line number.
+	lineH          float64
+	border, accent color.NRGBA
 }
 
 // layoutBalloon wraps and measures one message.
-func (g *Game) layoutBalloon(msg string) *balloon {
+func (g *Game) layoutBalloon(msg message.Message) *balloon {
 	f := g.fonts.message
 	// The balloon may not be wider than the monitor, whatever the setting says.
 	maxWidth := math.Min(float64(g.cfg.Message.MaxWidth), g.monitor.W)
 	maxText := math.Max(maxWidth-2*balloonPadding, 1)
 
-	lines := g.wrap(f, msg, maxText)
+	lines := richtext.Wrap(richtext.Parse(msg.Text), f, maxText)
 	b := &balloon{
 		lines: lines,
-		textW: g.blockWidth(f, lines),
+		lineH: f.lineHeight(),
+		textW: richtext.BlockWidth(lines),
 		textH: float64(len(lines)) * f.lineHeight(),
 	}
+	b.border, b.accent = colorsFor(msg.Level)
+
+	if msg.Title != "" {
+		// A heading is not scanned for links: it names where the message came
+		// from, and a sender that wants a link puts it in the text.
+		b.title = richtext.Wrap([]richtext.Span{{Text: msg.Title}}, f, maxText)
+		b.titleH = float64(len(b.title))*f.lineHeight() + titleGap
+		if w := richtext.BlockWidth(b.title); w > b.textW {
+			b.textW = w
+		}
+	}
+
 	b.width = b.textW + 2*balloonPadding
-	b.height = b.textH + 2*balloonPadding
+	b.height = b.titleH + b.textH + 2*balloonPadding
 	return b
+}
+
+// linkRect is where one link sits inside a balloon, relative to the balloon's
+// top-left corner, together with where it goes.
+type linkRect struct {
+	x, y, w, h float64
+	url        string
+}
+
+// links lists every clickable piece of the balloon. It is worked out from the
+// same numbers the text is drawn with, so what is underlined and what can be
+// clicked cannot drift apart.
+func (b *balloon) links() []linkRect {
+	var out []linkRect
+	top := balloonPadding + b.titleH
+	for i, line := range b.lines {
+		for _, run := range line.Runs {
+			if !run.Style.IsLink() {
+				continue
+			}
+			out = append(out, linkRect{
+				x:   balloonPadding + run.X,
+				y:   top + float64(i)*b.lineH,
+				w:   run.Width,
+				h:   b.lineH,
+				url: run.Style.Link,
+			})
+		}
+	}
+	return out
 }
 
 // Draw paints the pet, and whatever is above it. Everything it does not paint
@@ -126,10 +202,42 @@ func (g *Game) drawBalloons(screen *ebiten.Image) {
 				float32(balloonRadius*ds),
 			)
 		}
-		fillAndStroke(screen, path, ds)
+		fillAndStroke(screen, path, ds, b.border)
 
-		g.drawText(screen, b.lines, (x+balloonPadding)*ds, (y+balloonPadding)*ds,
+		if len(b.title) > 0 {
+			g.drawRichText(screen, b.title, (x+balloonPadding)*ds, (y+balloonPadding)*ds,
+				g.fonts.message, b.accent)
+		}
+		g.drawRichText(screen, b.lines, (x+balloonPadding)*ds, (y+balloonPadding+b.titleH)*ds,
 			g.fonts.message, textColor)
+	}
+}
+
+// drawRichText draws wrapped lines run by run, so that a link can be a
+// different colour from the words either side of it. Each run is positioned
+// from the offset the wrapper measured rather than from a running total, which
+// keeps the underline under the text it belongs to.
+func (g *Game) drawRichText(screen *ebiten.Image, lines []richtext.Line, x, y float64, f fontFace, clr color.Color) {
+	ds := g.deviceScale
+	lineH := f.lineHeight()
+
+	for i, line := range lines {
+		top := y + float64(i)*lineH*ds
+		for _, run := range line.Runs {
+			runColor := clr
+			if run.Style.IsLink() {
+				runColor = linkColor
+			}
+			g.drawText(screen, []string{run.Text}, x+run.X*ds, top, f, runColor)
+
+			if run.Style.IsLink() {
+				under := top + (lineH-underlineDrop)*ds
+				vector.StrokeLine(screen,
+					float32(x+run.X*ds), float32(under),
+					float32(x+(run.X+run.Width)*ds), float32(under),
+					float32(ds), linkColor, false)
+			}
+		}
 	}
 }
 
@@ -141,7 +249,7 @@ func (g *Game) drawMenu(screen *ebiten.Image) {
 	fillAndStroke(screen, roundedRectPath(
 		float32(x*ds), float32(y*ds), float32(m.width*ds), float32(m.height*ds),
 		float32(menuRadius*ds),
-	), ds)
+	), ds, panelBorder)
 
 	for i, it := range m.items {
 		rx, ry, rw, rh := m.rowRect(x, y, i)
@@ -195,13 +303,13 @@ func (g *Game) drawWindowBounds(screen *ebiten.Image) {
 		float32(g.win.W*ds), float32(g.win.H*ds), float32(ds), debugBorder, false)
 }
 
-func fillAndStroke(screen *ebiten.Image, path *vector.Path, ds float64) {
+func fillAndStroke(screen *ebiten.Image, path *vector.Path, ds float64, border color.NRGBA) {
 	fill := &vector.DrawPathOptions{AntiAlias: true}
 	fill.ColorScale.ScaleWithColor(panelFill)
 	vector.FillPath(screen, path, &vector.FillOptions{FillRule: vector.FillRuleNonZero}, fill)
 
 	stroke := &vector.DrawPathOptions{AntiAlias: true}
-	stroke.ColorScale.ScaleWithColor(panelBorder)
+	stroke.ColorScale.ScaleWithColor(border)
 	vector.StrokePath(screen, path, &vector.StrokeOptions{
 		Width:    float32(balloonStroke * ds),
 		LineJoin: vector.LineJoinRound,

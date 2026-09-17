@@ -188,6 +188,11 @@ type Message struct {
 	// dropped once it is full.
 	MaxQueue  int     `yaml:"max_queue" json:"max_queue"`
 	TextScale float64 `yaml:"text_scale" json:"text_scale"`
+	// OpenLinks says whether clicking a URL in a message opens it. Links are
+	// drawn as links either way; this only decides whether they do anything.
+	// Anything that can reach the API can put a link in front of the person at
+	// this desktop, so it is worth being able to turn off.
+	OpenLinks bool `yaml:"open_links" json:"open_links"`
 }
 
 // History is how much of what the pet has said is kept for the messages page.
@@ -248,6 +253,7 @@ func Default() Config {
 			MaxWidth:    640,
 			MaxQueue:    20,
 			TextScale:   1.5,
+			OpenLinks:   true,
 		},
 		Font: Font{
 			Path:   "",

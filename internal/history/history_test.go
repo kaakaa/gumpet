@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/kaakaa/gumpet/internal/config"
+	"github.com/kaakaa/gumpet/internal/message"
 )
 
 // clock is a stand-in for time.Now that only moves when a test says so.
@@ -32,7 +33,7 @@ func TestAddAndListNewestFirst(t *testing.T) {
 	s, c := newStore(t, config.History{Max: 10})
 
 	for _, text := range []string{"one", "two", "three"} {
-		s.Add(text, 0)
+		s.Add(message.Message{Text: text})
 		c.t = c.t.Add(time.Second)
 	}
 
@@ -48,8 +49,8 @@ func TestAddAndListNewestFirst(t *testing.T) {
 func TestAddReturnsAUsableID(t *testing.T) {
 	s, _ := newStore(t, config.History{Max: 10})
 
-	first := s.Add("one", 0)
-	second := s.Add("two", 0)
+	first := s.Add(message.Message{Text: "one"})
+	second := s.Add(message.Message{Text: "two"})
 
 	if first.ID == "" || second.ID == "" {
 		t.Fatal("Add returned an empty ID")
@@ -64,7 +65,7 @@ func TestAddReturnsAUsableID(t *testing.T) {
 
 func TestMarkShown(t *testing.T) {
 	s, c := newStore(t, config.History{Max: 10})
-	rec := s.Add("hello", 0)
+	rec := s.Add(message.Message{Text: "hello"})
 
 	c.t = c.t.Add(3 * time.Second)
 	s.MarkShown(rec.ID)
@@ -80,7 +81,7 @@ func TestMarkShown(t *testing.T) {
 
 func TestMarkShownKeepsTheFirstTime(t *testing.T) {
 	s, c := newStore(t, config.History{Max: 10})
-	rec := s.Add("hello", 0)
+	rec := s.Add(message.Message{Text: "hello"})
 
 	s.MarkShown(rec.ID)
 	first := s.List()[0].ShownAt
@@ -94,7 +95,7 @@ func TestMarkShownKeepsTheFirstTime(t *testing.T) {
 
 func TestMarkShownIgnoresAnUnknownID(t *testing.T) {
 	s, _ := newStore(t, config.History{Max: 10})
-	s.Add("hello", 0)
+	s.Add(message.Message{Text: "hello"})
 
 	s.MarkShown("m999") // pruned, or from a previous run
 
@@ -107,7 +108,7 @@ func TestMaxDropsTheOldest(t *testing.T) {
 	s, c := newStore(t, config.History{Max: 3})
 
 	for _, text := range []string{"one", "two", "three", "four", "five"} {
-		s.Add(text, 0)
+		s.Add(message.Message{Text: text})
 		c.t = c.t.Add(time.Second)
 	}
 
@@ -126,9 +127,9 @@ func TestMaxDropsTheOldest(t *testing.T) {
 func TestRetentionDropsWhatHasAgedOut(t *testing.T) {
 	s, c := newStore(t, config.History{Max: 100, Hours: 1})
 
-	s.Add("old", 0)
+	s.Add(message.Message{Text: "old"})
 	c.t = c.t.Add(90 * time.Minute)
-	s.Add("new", 0)
+	s.Add(message.Message{Text: "new"})
 
 	got := texts(s.List())
 	if len(got) != 1 || got[0] != "new" {
@@ -139,9 +140,9 @@ func TestRetentionDropsWhatHasAgedOut(t *testing.T) {
 func TestZeroRetentionKeepsEverythingUpToMax(t *testing.T) {
 	s, c := newStore(t, config.History{Max: 100, Hours: 0})
 
-	s.Add("old", 0)
+	s.Add(message.Message{Text: "old"})
 	c.t = c.t.Add(30 * 24 * time.Hour)
-	s.Add("new", 0)
+	s.Add(message.Message{Text: "new"})
 
 	if got := s.Len(); got != 2 {
 		t.Errorf("kept %d messages, want both", got)
@@ -151,7 +152,7 @@ func TestZeroRetentionKeepsEverythingUpToMax(t *testing.T) {
 func TestSetLimitsPrunesImmediately(t *testing.T) {
 	s, c := newStore(t, config.History{Max: 100})
 	for _, text := range []string{"one", "two", "three"} {
-		s.Add(text, 0)
+		s.Add(message.Message{Text: text})
 		c.t = c.t.Add(time.Second)
 	}
 
@@ -165,7 +166,7 @@ func TestSetLimitsPrunesImmediately(t *testing.T) {
 
 func TestListDoesNotHandOutTheStoresOwnSlice(t *testing.T) {
 	s, _ := newStore(t, config.History{Max: 10})
-	s.Add("hello", 0)
+	s.Add(message.Message{Text: "hello"})
 
 	s.List()[0].Text = "tampered"
 
@@ -182,7 +183,7 @@ func TestConcurrentUse(t *testing.T) {
 	go func() {
 		defer close(done)
 		for range 200 {
-			rec := s.Add("x", 0)
+			rec := s.Add(message.Message{Text: "x"})
 			s.MarkShown(rec.ID)
 		}
 	}()
@@ -194,5 +195,26 @@ func TestConcurrentUse(t *testing.T) {
 
 	if got := s.Len(); got != 50 {
 		t.Errorf("kept %d messages, want the 50 the settings allow", got)
+	}
+}
+
+// The page shows what the sender said about the message, so the record has to
+// carry it rather than reducing everything to text.
+func TestAddKeepsTheTitleAndLevel(t *testing.T) {
+	c := &clock{t: time.Unix(0, 0)}
+	s := New(config.History{Max: 10})
+	s.now = c.now
+
+	rec := s.Add(message.Message{Text: "tests failed", Title: "CI", Level: message.LevelError})
+	if rec.Title != "CI" || rec.Level != message.LevelError {
+		t.Errorf("Add returned title %q level %q, want CI/error", rec.Title, rec.Level)
+	}
+
+	listed := s.List()
+	if len(listed) != 1 {
+		t.Fatalf("List returned %d records, want 1", len(listed))
+	}
+	if listed[0].Title != "CI" || listed[0].Level != message.LevelError {
+		t.Errorf("listed title %q level %q, want CI/error", listed[0].Title, listed[0].Level)
 	}
 }

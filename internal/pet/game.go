@@ -400,7 +400,7 @@ func (g *Game) rebuildPanel() {
 	}
 	sizes := make([]layout.Size, len(g.showing))
 	for i := range g.showing {
-		b := g.layoutBalloon(g.showing[i].msg.Text)
+		b := g.layoutBalloon(g.showing[i].msg)
 		g.showing[i].balloon = b
 		sizes[i] = layout.Size{W: b.width, H: b.height}
 	}
