@@ -11,12 +11,17 @@ import (
 	"time"
 
 	"github.com/kaakaa/gumpet/internal/config"
+	"github.com/kaakaa/gumpet/internal/message"
 )
 
 // Record is one message and what became of it.
 type Record struct {
 	ID   string `json:"id"`
 	Text string `json:"text"`
+	// Title is the heading the sender gave the message, usually empty.
+	Title string `json:"title,omitempty"`
+	// Level is how loud the message was said to be.
+	Level message.Level `json:"level,omitempty"`
 	// Duration is the display time asked for when the message was sent, or
 	// zero to use the configured default.
 	Duration time.Duration `json:"-"`
@@ -56,16 +61,20 @@ func (s *Store) SetLimits(cfg config.History) {
 }
 
 // Add records a newly received message and returns it, with the ID the pet
-// will report back when it shows it.
-func (s *Store) Add(text string, duration time.Duration) Record {
+// will report back when it shows it. Everything about the message except its
+// ID and its timestamps comes from the caller, so that what the page shows is
+// what the pet was actually asked to say.
+func (s *Store) Add(msg message.Message) Record {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	s.nextID++
 	rec := Record{
 		ID:       fmt.Sprintf("m%d", s.nextID),
-		Text:     text,
-		Duration: duration,
+		Text:     msg.Text,
+		Title:    msg.Title,
+		Level:    msg.Level,
+		Duration: msg.Duration,
 		QueuedAt: s.now(),
 	}
 	s.records = append(s.records, rec)

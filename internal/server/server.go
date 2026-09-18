@@ -52,8 +52,18 @@ type Server struct {
 }
 
 // messageRequest is the JSON body of POST /api/v1/messages.
+//
+// Title and Level are here so that a program with something to say about its
+// own message has somewhere to put it. Without them the only place to say
+// "this is an error from CI" is inside the text, which is how gumpet's own
+// Claude Code hook ended up prefixing "質問: " by hand.
 type messageRequest struct {
 	Text string `json:"text"`
+	// Title is a heading for the message. Optional, and usually absent.
+	Title string `json:"title"`
+	// Level is info, success, warn or error. Anything else is taken as info
+	// rather than refused: see [message.ParseLevel].
+	Level string `json:"level"`
 	// DurationSec overrides message.duration_sec for this one message.
 	DurationSec float64 `json:"duration_sec"`
 }
@@ -235,12 +245,17 @@ func (s *Server) handleMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	duration := time.Duration(req.DurationSec * float64(time.Second))
+	msg := message.Message{
+		Text:     req.Text,
+		Title:    strings.TrimSpace(req.Title),
+		Level:    message.ParseLevel(req.Level),
+		Duration: time.Duration(req.DurationSec * float64(time.Second)),
+	}
 	// Record it before handing it over, so that a message the pet never gets
 	// round to showing still appears on the messages page as pending.
-	rec := s.history.Add(req.Text, duration)
+	rec := s.history.Add(msg)
+	msg.ID = rec.ID
 
-	msg := message.Message{ID: rec.ID, Text: req.Text, Duration: duration}
 	select {
 	case s.out <- msg:
 		writeJSON(w, http.StatusAccepted, map[string]string{"status": "accepted", "id": rec.ID})

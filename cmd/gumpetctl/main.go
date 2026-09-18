@@ -35,6 +35,8 @@ func run() error {
 	addr := flag.String("addr", "", "gumpet address, overriding the config file")
 	token := flag.String("token", "", "auth token, overriding the config file")
 	duration := flag.Float64("d", 0, "seconds to keep the message up (0 uses gumpet's own setting)")
+	title := flag.String("title", "", "heading shown above the message")
+	level := flag.String("level", "", "info, success, warn or error; colours the balloon")
 	settings := flag.Bool("settings", false, "open the settings page in a browser")
 	flag.Usage = usage
 	flag.Parse()
@@ -66,7 +68,7 @@ func run() error {
 	if *settings {
 		return openSettings(*addr)
 	}
-	return send(*addr, *token, text, *duration)
+	return send(*addr, *token, text, *title, *level, *duration)
 }
 
 // openSettings points a browser at the running gumpet. The URL is printed
@@ -101,11 +103,13 @@ func readText(args []string) (string, error) {
 	return strings.Join(args, " "), nil
 }
 
-func send(addr, token, text string, durationSec float64) error {
+func send(addr, token, text, title, level string, durationSec float64) error {
 	body, err := json.Marshal(struct {
 		Text        string  `json:"text"`
+		Title       string  `json:"title,omitempty"`
+		Level       string  `json:"level,omitempty"`
 		DurationSec float64 `json:"duration_sec,omitempty"`
-	}{Text: text, DurationSec: durationSec})
+	}{Text: text, Title: title, Level: level, DurationSec: durationSec})
 	if err != nil {
 		return err
 	}

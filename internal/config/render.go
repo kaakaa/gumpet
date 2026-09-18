@@ -93,6 +93,10 @@ message:
   max_queue: {{ .Message.MaxQueue }}
   # Size of the message text relative to the font's own 12px.
   text_scale: {{ n .Message.TextScale }}
+  # Whether clicking a URL in a message opens it in your browser. URLs are
+  # spotted automatically and always drawn as links; this decides whether the
+  # click does anything. Only http and https are ever opened.
+  open_links: {{ .Message.OpenLinks }}
 
 font:
   # A .ttf, .otf or .ttc to draw messages and the menu with. Empty looks for a

@@ -358,6 +358,16 @@
         <p class="hint">How many messages may wait their turn before the oldest are dropped.</p>
       </div>
       <div class="row">
+        <label for="open-links">Open links when clicked</label>
+        <input type="checkbox" id="open-links" data-path="message.open_links">
+        <p class="hint">
+          URLs in a message are spotted on their own and always drawn as links.
+          This decides whether clicking one opens it. Only http and https are
+          ever opened &mdash; anything that can send gumpet a message can put a
+          link in front of you.
+        </p>
+      </div>
+      <div class="row">
         <label for="test-text">Try it</label>
         <div class="inline">
           <input type="text" id="test-text" value="Hello, gopher!" autocomplete="off">
