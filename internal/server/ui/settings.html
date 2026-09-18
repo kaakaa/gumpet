@@ -325,6 +325,29 @@
         <input type="number" id="speed" data-path="behavior.speed" data-kind="float" min="0" step="5">
         <p class="hint">Pixels per second.</p>
       </div>
+      <div class="row">
+        <label for="chatter">Talk to itself</label>
+        <input type="checkbox" id="chatter" data-path="behavior.chatter.enabled">
+        <p class="hint">
+          Say something now and then when no message has arrived, so the pet is
+          doing something between notifications. Nothing is fetched over the
+          network. Ignored while the mode above is &ldquo;Hide until a
+          message&rdquo;, since a remark would only summon the pet back.
+        </p>
+      </div>
+      <div class="row">
+        <label for="chatter-interval">How often</label>
+        <input type="number" id="chatter-interval" data-path="behavior.chatter.interval_sec" data-kind="float" min="1" step="30">
+        <p class="hint">Seconds between remarks, give or take 30%.</p>
+      </div>
+      <div class="row">
+        <label for="chatter-source">Sayings file</label>
+        <input type="text" id="chatter-source" data-path="behavior.chatter.source" placeholder="the bundled list">
+        <p class="hint">
+          One saying per line; blank lines and lines starting with # are
+          skipped. Leave empty for the list gumpet ships with.
+        </p>
+      </div>
     </section>
 
     <section>
