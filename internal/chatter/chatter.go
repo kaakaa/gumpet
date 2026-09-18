@@ -90,6 +90,20 @@ func (s *Sayer) Tick(dt time.Duration, quiet bool) (string, bool) {
 	return s.pick(), true
 }
 
+// SetSayings swaps in a new list, for a source that changes under the pet —
+// headlines from a feed, rather than a fixed file.
+//
+// The countdown is left alone: new material is not a reason to say something
+// sooner. The "do not repeat" index is dropped, because it refers to a
+// position in a list that no longer exists.
+func (s *Sayer) SetSayings(sayings []string) {
+	if s == nil || len(sayings) == 0 {
+		return
+	}
+	s.sayings = sayings
+	s.last = -1
+}
+
 // pick chooses a saying, avoiding the one said last. With a single saying
 // there is no choice to make, and repeating it is the only option.
 func (s *Sayer) pick() string {

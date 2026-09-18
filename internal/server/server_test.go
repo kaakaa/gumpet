@@ -634,7 +634,9 @@ func TestTheMessagesListShowsTitleAndLevel(t *testing.T) {
 // quietly wipe the neighbouring keys.
 func TestAThreeLevelSettingMergesWithoutDisturbingItsSiblings(t *testing.T) {
 	cfg := config.Default()
-	cfg.Behavior.Chatter = config.Chatter{Enabled: false, IntervalSec: 600, Source: "/tmp/mine.txt"}
+	cfg.Behavior.Chatter = config.Chatter{
+		Enabled: false, IntervalSec: 600, Source: "/tmp/mine.txt", FetchIntervalSec: 1800,
+	}
 	s, _, updates := newTestServerWithConfig(t, cfg, 1)
 
 	rec := do(t, s, http.MethodPut, "/api/v1/config", "application/json",

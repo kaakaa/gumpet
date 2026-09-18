@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/kaakaa/gumpet/internal/feed"
 )
 
 // Anchor is the corner of the monitor the stage window is pinned to.
@@ -187,6 +189,13 @@ type Chatter struct {
 	IntervalSec float64 `yaml:"interval_sec" json:"interval_sec"`
 	// Source is a file of sayings, one per line. Empty uses the bundled list.
 	Source string `yaml:"source" json:"source"`
+	// Feed is an RSS or Atom URL whose headlines the pet reads out instead of
+	// the sayings above. Empty, which is the default, means gumpet makes no
+	// outgoing connections at all.
+	Feed string `yaml:"feed" json:"feed"`
+	// FetchIntervalSec is how often the feed is re-read. It is separate from
+	// IntervalSec because there is no reason to fetch once per remark.
+	FetchIntervalSec float64 `yaml:"fetch_interval_sec" json:"fetch_interval_sec"`
 }
 
 // Message controls how long text stays up and how big it is drawn.
@@ -262,9 +271,11 @@ func Default() Config {
 			Roam:        RoamHorizontal,
 			Speed:       45,
 			Chatter: Chatter{
-				Enabled:     false,
-				IntervalSec: 600,
-				Source:      "",
+				Enabled:          false,
+				IntervalSec:      600,
+				Source:           "",
+				Feed:             "",
+				FetchIntervalSec: 1800,
 			},
 		},
 		Message: Message{
@@ -341,6 +352,12 @@ func (c Config) Validate() error {
 	}
 	if c.Behavior.Chatter.IntervalSec <= 0 {
 		return fmt.Errorf("behavior.chatter.interval_sec must be positive, got %v", c.Behavior.Chatter.IntervalSec)
+	}
+	if c.Behavior.Chatter.FetchIntervalSec <= 0 {
+		return fmt.Errorf("behavior.chatter.fetch_interval_sec must be positive, got %v", c.Behavior.Chatter.FetchIntervalSec)
+	}
+	if c.Behavior.Chatter.Feed != "" && !feed.Openable(c.Behavior.Chatter.Feed) {
+		return fmt.Errorf("behavior.chatter.feed must be an http or https URL, got %q", c.Behavior.Chatter.Feed)
 	}
 	if c.Message.DurationSec <= 0 {
 		return fmt.Errorf("message.duration_sec must be positive, got %v", c.Message.DurationSec)
