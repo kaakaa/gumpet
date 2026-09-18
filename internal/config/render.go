@@ -90,9 +90,18 @@ behavior:
     # machine rather than something idly muttering.
     interval_sec: {{ n .Behavior.Chatter.IntervalSec }}
     # A file of sayings, one per line; blank lines and lines starting with #
-    # are skipped. Empty uses the list gumpet ships with. Nothing is fetched
-    # over the network.
+    # are skipped. Empty uses the list gumpet ships with.
     source: {{ q .Behavior.Chatter.Source }}
+    # An RSS or Atom URL to read headlines from instead of the sayings above.
+    # The pet says the headline and the link, and the link is clickable.
+    #
+    # This is the only thing in gumpet that connects out to anywhere. Empty,
+    # which is the default, means it makes no outgoing requests at all. Only
+    # http and https; only the headlines, never the articles.
+    feed: {{ q .Behavior.Chatter.Feed }}
+    # How often to re-read the feed, in seconds. There is no reason to fetch
+    # once per remark, so this is much longer than interval_sec.
+    fetch_interval_sec: {{ n .Behavior.Chatter.FetchIntervalSec }}
 
 message:
   duration_sec: {{ n .Message.DurationSec }}
