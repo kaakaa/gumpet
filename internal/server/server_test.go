@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"log/slog"
@@ -668,4 +669,65 @@ func TestAnUnusableChatterIntervalIsRejected(t *testing.T) {
 	if rec.Code != http.StatusBadRequest {
 		t.Errorf("status %d, want 400: %s", rec.Code, rec.Body)
 	}
+}
+
+// The bug this pins: a second gumpet used to start happily and receive
+// nothing, because binding was folded into Serve and its error was not read
+// until the process exited. Listen exists so the failure arrives up front.
+func TestListenReportsAnAddressAlreadyInUse(t *testing.T) {
+	first, _, _ := newTestServerWithConfig(t, addrConfig(t, "127.0.0.1:0"), 1)
+	ln, err := first.Listen()
+	if err != nil {
+		t.Fatalf("first Listen: %v", err)
+	}
+	defer ln.Close()
+
+	// A second server on the address the first one actually got.
+	second, _, _ := newTestServerWithConfig(t, addrConfig(t, ln.Addr().String()), 1)
+	got, err := second.Listen()
+	if err == nil {
+		got.Close()
+		t.Fatal("second Listen succeeded on an address already in use, want an error")
+	}
+	if !strings.Contains(err.Error(), ln.Addr().String()) {
+		t.Errorf("error %q does not name the address that could not be had", err)
+	}
+}
+
+func TestListenThenServeAnswersRequests(t *testing.T) {
+	s, _, _ := newTestServerWithConfig(t, addrConfig(t, "127.0.0.1:0"), 1)
+	ln, err := s.Listen()
+	if err != nil {
+		t.Fatalf("Listen: %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- s.Serve(ctx, ln) }()
+
+	resp, err := http.Get("http://" + ln.Addr().String() + "/api/v1/healthz")
+	if err != nil {
+		t.Fatalf("GET healthz: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("healthz returned %d, want 200", resp.StatusCode)
+	}
+
+	cancel()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Errorf("Serve returned %v, want a clean shutdown", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Error("Serve did not return after the context was cancelled")
+	}
+}
+
+func addrConfig(t *testing.T, addr string) config.Config {
+	t.Helper()
+	cfg := config.Default()
+	cfg.Server.Addr = addr
+	return cfg
 }
