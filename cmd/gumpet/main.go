@@ -86,8 +86,26 @@ func run() error {
 	inbox := make(chan message.Message, inboxSize)
 	monitors := pet.Monitors()
 	srv := server.New(store, hist, monitors, inbox, log)
-	served := make(chan error, 1)
-	go func() { served <- srv.Serve(ctx) }()
+
+	// Claim the port before opening a window. gumpet exists to be sent
+	// messages, so one that cannot listen has nothing to offer: starting
+	// anyway leaves a pet walking about that looks entirely normal and quietly
+	// receives nothing.
+	ln, err := srv.Listen()
+	if err != nil {
+		return fmt.Errorf("%w\n\nis gumpet already running? only one can hold an address, "+
+			"and the second one would not be able to receive anything", err)
+	}
+
+	served := make(chan struct{})
+	go func() {
+		defer close(served)
+		// Reported here rather than after the game ends, so that a server that
+		// stops during a session is news at the time.
+		if err := srv.Serve(ctx, ln); err != nil {
+			log.Error("message server stopped", "error", err)
+		}
+	}()
 
 	for _, m := range monitors {
 		log.Info("monitor", "display", m.Label())
@@ -115,9 +133,7 @@ func run() error {
 	}
 
 	stop()
-	if err := <-served; err != nil {
-		log.Error("message server stopped", "error", err)
-	}
+	<-served
 	return nil
 }
 

@@ -97,15 +97,24 @@ func New(store *settings.Store, hist *history.Store, monitors []display.Monitor,
 	return s
 }
 
-// Serve listens and blocks until ctx is cancelled or the listener fails. The
-// address is read once, here: changing it needs a restart.
-func (s *Server) Serve(ctx context.Context) error {
+// Listen claims the address. It is separate from [Server.Serve] so that a port
+// that cannot be had is a startup failure, reported before anything else
+// happens, rather than something discovered when the process exits.
+//
+// The address is read once, here: changing it needs a restart.
+func (s *Server) Listen() (net.Listener, error) {
 	ln, err := net.Listen("tcp", s.addr)
 	if err != nil {
-		return fmt.Errorf("listen on %s: %w", s.addr, err)
+		return nil, fmt.Errorf("listen on %s: %w", s.addr, err)
 	}
 	s.log.Info("listening", "addr", ln.Addr().String(), "settings", "http://"+s.addr+"/")
+	return ln, nil
+}
 
+// Serve handles requests on ln until ctx is cancelled or serving fails. It
+// takes the listener rather than making one so that whoever starts gumpet can
+// find out whether the address is available before opening a window.
+func (s *Server) Serve(ctx context.Context, ln net.Listener) error {
 	errc := make(chan error, 1)
 	go func() { errc <- s.server.Serve(ln) }()
 
