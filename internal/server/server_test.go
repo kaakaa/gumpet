@@ -546,3 +546,85 @@ func TestConfigCarriesAnEmptyListRatherThanNull(t *testing.T) {
 		t.Errorf("monitors is not an empty array: %s", rec.Body)
 	}
 }
+
+func TestAMessageCarriesItsTitleAndLevel(t *testing.T) {
+	s, out := newTestServer(t, config.Server{}, 1)
+
+	rec := post(t, s, "application/json",
+		`{"text":"tests failed","title":"CI","level":"error"}`, nil)
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("status %d, want %d: %s", rec.Code, http.StatusAccepted, rec.Body)
+	}
+
+	msg := <-out
+	if msg.Title != "CI" {
+		t.Errorf("title %q, want CI", msg.Title)
+	}
+	if msg.Level != message.LevelError {
+		t.Errorf("level %q, want error", msg.Level)
+	}
+}
+
+// A message is worth more than the field that describes it, so a level nobody
+// recognises must not cost the sender the message.
+func TestAnUnknownLevelIsTakenAsInfo(t *testing.T) {
+	s, out := newTestServer(t, config.Server{}, 1)
+
+	rec := post(t, s, "application/json", `{"text":"hello","level":"CRITICAL"}`, nil)
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("status %d, want %d: %s", rec.Code, http.StatusAccepted, rec.Body)
+	}
+	if msg := <-out; msg.Level != message.LevelInfo {
+		t.Errorf("level %q, want info", msg.Level)
+	}
+}
+
+func TestAMessageWithNoLevelIsInfo(t *testing.T) {
+	s, out := newTestServer(t, config.Server{}, 1)
+
+	post(t, s, "application/json", `{"text":"hello"}`, nil)
+	msg := <-out
+	if msg.Level != message.LevelInfo {
+		t.Errorf("level %q, want info", msg.Level)
+	}
+	if msg.Title != "" {
+		t.Errorf("title %q, want empty", msg.Title)
+	}
+}
+
+func TestPlainTextMessagesStillArriveWithALevel(t *testing.T) {
+	s, out := newTestServer(t, config.Server{}, 1)
+
+	post(t, s, "text/plain", "just text", nil)
+	if msg := <-out; msg.Level != message.LevelInfo {
+		t.Errorf("level %q, want info", msg.Level)
+	}
+}
+
+func TestTheMessagesListShowsTitleAndLevel(t *testing.T) {
+	s, out := newTestServer(t, config.Server{}, 1)
+	post(t, s, "application/json", `{"text":"deployed","title":"release","level":"success"}`, nil)
+	<-out
+
+	rec := do(t, s, http.MethodGet, "/api/v1/messages", "", "", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d, want 200: %s", rec.Code, rec.Body)
+	}
+	var got struct {
+		Messages []struct {
+			Text  string `json:"text"`
+			Title string `json:"title"`
+			Level string `json:"level"`
+		} `json:"messages"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("parse response: %v", err)
+	}
+	if len(got.Messages) != 1 {
+		t.Fatalf("listed %d messages, want 1", len(got.Messages))
+	}
+	if got.Messages[0].Title != "release" || got.Messages[0].Level != "success" {
+		t.Errorf("listed title %q level %q, want release/success",
+			got.Messages[0].Title, got.Messages[0].Level)
+	}
+}

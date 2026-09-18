@@ -160,7 +160,8 @@
     font-size: 12px;
   }
   .badge {
-    grid-row: 1 / span 2;
+    /* All rows, however many there are: a message with a title has three. */
+    grid-row: 1 / -1;
     grid-column: 2;
     align-self: center;
     padding: 3px 10px;
@@ -171,6 +172,26 @@
   }
   .badge.shown { background: var(--shown-bg); color: var(--shown-ink); }
   .badge.waiting { background: var(--waiting-bg); color: var(--waiting-ink); }
+
+  /* A message's level is shown as a stripe down its left edge rather than
+     another badge: the badges already say whether the pet has said it, and two
+     badges per row reads as noise. */
+  li.level-success { border-left: 3px solid var(--shown-ink); }
+  li.level-warn { border-left: 3px solid var(--waiting-ink); }
+  li.level-error { border-left: 3px solid var(--err-ink); }
+
+  .title {
+    grid-column: 1;
+    margin: 0 0 2px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  li.level-success .title { color: var(--shown-ink); }
+  li.level-warn .title { color: var(--waiting-ink); }
+  li.level-error .title { color: var(--err-ink); }
 
   .empty {
     background: var(--card);
@@ -269,7 +290,11 @@
 
     return messages.filter(function (msg) {
       if (cutoff > 0 && new Date(msg.queued_at).getTime() < cutoff) { return false; }
-      return query === "" || msg.text.toLowerCase().indexOf(query) >= 0;
+      if (query === "") { return true; }
+      // The title is part of the message as far as anyone reading the page is
+      // concerned, so searching for "CI" should find the ones labelled CI.
+      return msg.text.toLowerCase().indexOf(query) >= 0 ||
+        (msg.title || "").toLowerCase().indexOf(query) >= 0;
     });
   }
 
@@ -306,6 +331,20 @@
 
     messages.forEach(function (msg) {
       var li = document.createElement("li");
+      // Only the levels with a colour of their own get a class; "info" and
+      // anything unrecognised are left looking ordinary.
+      if (msg.level === "success" || msg.level === "warn" || msg.level === "error") {
+        li.className = "level-" + msg.level;
+      }
+
+      if (msg.title) {
+        var title = document.createElement("p");
+        title.className = "title";
+        // textContent, like everything else here: a title comes from whatever
+        // sent the message and must never be parsed as markup.
+        title.textContent = msg.title;
+        li.appendChild(title);
+      }
 
       var text = document.createElement("p");
       text.className = "text";

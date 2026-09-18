@@ -10,6 +10,7 @@ import (
 	"github.com/kaakaa/gumpet/internal/browser"
 	"github.com/kaakaa/gumpet/internal/config"
 	"github.com/kaakaa/gumpet/internal/message"
+	"github.com/kaakaa/gumpet/internal/richtext"
 )
 
 // The menu is drawn at a fixed size rather than following message.text_scale:
@@ -62,10 +63,12 @@ func (g *Game) buildMenu() *menu {
 			rule:   true,
 			closes: true,
 			action: func() error {
-				text := "Hello! " + time.Now().Format("15:04:05")
-				msg := message.Message{Text: text}
+				msg := message.Message{
+					Text:  "Hello! " + time.Now().Format("15:04:05"),
+					Level: message.LevelInfo,
+				}
 				if g.history != nil {
-					msg.ID = g.history.Add(text, 0).ID
+					msg.ID = g.history.Add(msg).ID
 				}
 				g.enqueue(msg)
 				return nil
@@ -234,9 +237,16 @@ func (g *Game) handleInput(dt time.Duration) error {
 		return nil
 	}
 
-	// Clicking a balloon takes it down, so a message that has been read does
-	// not have to be waited out.
+	// A link is checked before the balloon it sits in, because the balloon's
+	// own click takes it down: without this, following a link would always be
+	// the same gesture as throwing the message away.
 	if onBalloon >= 0 {
+		if url := g.linkAt(onBalloon, px, py); url != "" {
+			g.openLink(url)
+			return nil
+		}
+		// Clicking a balloon takes it down, so a message that has been read
+		// does not have to be waited out.
 		g.dismiss(onBalloon)
 		return nil
 	}
@@ -295,6 +305,48 @@ func (g *Game) balloonAt(px, py float64) int {
 		}
 	}
 	return -1
+}
+
+// linkAt returns the URL under a point in balloon i, or "" if the point is not
+// on a link.
+func (g *Game) linkAt(i int, px, py float64) string {
+	if i < 0 || i >= len(g.showing) || i >= len(g.placed) {
+		return ""
+	}
+	b := g.showing[i].balloon
+	if b == nil {
+		return ""
+	}
+	x := g.win.PanelX + g.placed[i].X
+	y := g.win.PanelY + g.placed[i].Y
+
+	for _, l := range b.links() {
+		if px >= x+l.x && px < x+l.x+l.w && py >= y+l.y && py < y+l.y+l.h {
+			return l.url
+		}
+	}
+	return ""
+}
+
+// openLink hands a URL to the browser, if the settings allow it and the URL is
+// one gumpet is prepared to open at all.
+//
+// Anything that can reach the HTTP API can put a link in front of whoever is at
+// this desktop. A click is required, which is most of the protection, but the
+// scheme check is what keeps that click from doing anything other than opening
+// a web page.
+func (g *Game) openLink(url string) {
+	if !g.cfg.Message.OpenLinks {
+		g.log.Info("not opening a link, message.open_links is off", "url", url)
+		return
+	}
+	if !richtext.Openable(url) {
+		g.log.Warn("refusing to open a link that is not http or https", "url", url)
+		return
+	}
+	if err := browser.Open(url); err != nil {
+		g.log.Error("could not open a link", "url", url, "error", err)
+	}
 }
 
 // idleLabel says what the pet does with itself between messages.
