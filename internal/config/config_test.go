@@ -19,14 +19,15 @@ func TestRenderRoundTrips(t *testing.T) {
 		{
 			name: "everything changed",
 			cfg: Config{
-				Server:   Server{Addr: "127.0.0.1:9999", Token: "s3cret"},
-				Window:   Window{AlwaysOnTop: false, ClickThrough: false, SkipTaskbar: false},
-				Stage:    Stage{Display: 2, Fullscreen: true, Width: 800, Height: 600, Anchor: AnchorCustom, MarginX: 1, MarginY: 2, X: 30, Y: 40},
-				Pet:      Pet{Source: "/tmp/cat.gif", Scale: 0.75, FPS: 12.5, FlipWhenFacingRight: false},
-				Behavior: Behavior{Mode: ModeOnMessage, IdleOpacity: 0.2, Roam: RoamWander, Speed: 0},
-				Message:  Message{DurationSec: 12.25, MaxVisible: 1, MaxWidth: 300, MaxQueue: 3, TextScale: 1.5, OpenLinks: false},
-				Font:     Font{Path: "/tmp/My Font.ttc", System: false},
-				History:  History{Max: 10, Hours: 0.5},
+				Server: Server{Addr: "127.0.0.1:9999", Token: "s3cret"},
+				Window: Window{AlwaysOnTop: false, ClickThrough: false, SkipTaskbar: false},
+				Stage:  Stage{Display: 2, Fullscreen: true, Width: 800, Height: 600, Anchor: AnchorCustom, MarginX: 1, MarginY: 2, X: 30, Y: 40},
+				Pet:    Pet{Source: "/tmp/cat.gif", Scale: 0.75, FPS: 12.5, FlipWhenFacingRight: false},
+				Behavior: Behavior{Mode: ModeOnMessage, IdleOpacity: 0.2, Roam: RoamWander, Speed: 0,
+					Chatter: Chatter{Enabled: true, IntervalSec: 90.5, Source: "/tmp/my sayings.txt"}},
+				Message: Message{DurationSec: 12.25, MaxVisible: 1, MaxWidth: 300, MaxQueue: 3, TextScale: 1.5, OpenLinks: false},
+				Font:    Font{Path: "/tmp/My Font.ttc", System: false},
+				History: History{Max: 10, Hours: 0.5},
 			},
 		},
 		{
@@ -171,6 +172,8 @@ func TestValidateRejectsBadValues(t *testing.T) {
 		{"zero queue", func(c *Config) { c.Message.MaxQueue = 0 }},
 		{"zero text scale", func(c *Config) { c.Message.TextScale = 0 }},
 		{"zero visible balloons", func(c *Config) { c.Message.MaxVisible = 0 }},
+		{"zero chatter interval", func(c *Config) { c.Behavior.Chatter.IntervalSec = 0 }},
+		{"negative chatter interval", func(c *Config) { c.Behavior.Chatter.IntervalSec = -1 }},
 		{"zero history", func(c *Config) { c.History.Max = 0 }},
 		{"negative retention", func(c *Config) { c.History.Hours = -1 }},
 	}

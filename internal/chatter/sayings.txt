@@ -1,0 +1,34 @@
+# What the pet says to itself when nobody has sent it anything.
+#
+# One saying per line. Blank lines are ignored, and a line starting with # is a
+# comment, like this one. Point behavior.chatter.source at your own file to
+# replace the lot — this one is only here so the feature does something on a
+# fresh install.
+#
+# These are Japanese proverbs, which are nobody's to own and short enough to
+# read in the second and a half a balloon is up.
+
+継続は力なり
+石の上にも三年
+急がば回れ
+塵も積もれば山となる
+七転び八起き
+千里の道も一歩から
+初心忘るべからず
+案ずるより産むが易し
+好きこそものの上手なれ
+人事を尽くして天命を待つ
+猿も木から落ちる
+灯台下暗し
+一期一会
+論より証拠
+習うより慣れろ
+果報は寝て待て
+転ばぬ先の杖
+明日は明日の風が吹く
+能ある鷹は爪を隠す
+急いては事を仕損じる
+待てば海路の日和あり
+二兎を追う者は一兎をも得ず
+虎穴に入らずんば虎子を得ず
+雨降って地固まる

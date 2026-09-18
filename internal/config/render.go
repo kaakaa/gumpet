@@ -81,6 +81,18 @@ behavior:
   roam: {{ .Behavior.Roam }}
   # Walking speed, pixels per second.
   speed: {{ n .Behavior.Speed }}
+  # Between messages the pet can talk to itself, so that it is doing something
+  # even when nothing has arrived. Off unless you ask for it.
+  chatter:
+    enabled: {{ .Behavior.Chatter.Enabled }}
+    # Roughly how many seconds between remarks. The wait is varied by up to
+    # 30% either side, because exactly the same gap every time sounds like a
+    # machine rather than something idly muttering.
+    interval_sec: {{ n .Behavior.Chatter.IntervalSec }}
+    # A file of sayings, one per line; blank lines and lines starting with #
+    # are skipped. Empty uses the list gumpet ships with. Nothing is fetched
+    # over the network.
+    source: {{ q .Behavior.Chatter.Source }}
 
 message:
   duration_sec: {{ n .Message.DurationSec }}

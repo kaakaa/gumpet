@@ -628,3 +628,42 @@ func TestTheMessagesListShowsTitleAndLevel(t *testing.T) {
 			got.Messages[0].Title, got.Messages[0].Level)
 	}
 }
+
+// behavior.chatter.* is the first setting nested three deep. The page sends
+// only what changed, so if the merge does not reach that far a save would
+// quietly wipe the neighbouring keys.
+func TestAThreeLevelSettingMergesWithoutDisturbingItsSiblings(t *testing.T) {
+	cfg := config.Default()
+	cfg.Behavior.Chatter = config.Chatter{Enabled: false, IntervalSec: 600, Source: "/tmp/mine.txt"}
+	s, _, updates := newTestServerWithConfig(t, cfg, 1)
+
+	rec := do(t, s, http.MethodPut, "/api/v1/config", "application/json",
+		`{"behavior":{"chatter":{"enabled":true}}}`, nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d, want 200: %s", rec.Code, rec.Body)
+	}
+
+	got := <-updates
+	if !got.Behavior.Chatter.Enabled {
+		t.Error("enabled did not take")
+	}
+	if got.Behavior.Chatter.IntervalSec != 600 {
+		t.Errorf("interval_sec = %v, want the 600 that was not mentioned", got.Behavior.Chatter.IntervalSec)
+	}
+	if got.Behavior.Chatter.Source != "/tmp/mine.txt" {
+		t.Errorf("source = %q, want the path that was not mentioned", got.Behavior.Chatter.Source)
+	}
+	if got.Behavior.Roam != cfg.Behavior.Roam || got.Behavior.Speed != cfg.Behavior.Speed {
+		t.Errorf("the rest of behavior changed: roam %q speed %v", got.Behavior.Roam, got.Behavior.Speed)
+	}
+}
+
+func TestAnUnusableChatterIntervalIsRejected(t *testing.T) {
+	s, _, _ := newTestServerWithConfig(t, config.Default(), 1)
+
+	rec := do(t, s, http.MethodPut, "/api/v1/config", "application/json",
+		`{"behavior":{"chatter":{"interval_sec":0}}}`, nil)
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status %d, want 400: %s", rec.Code, rec.Body)
+	}
+}

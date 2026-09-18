@@ -172,6 +172,21 @@ type Behavior struct {
 	Roam Roam `yaml:"roam" json:"roam"`
 	// Speed is the walking speed in pixels per second.
 	Speed float64 `yaml:"speed" json:"speed"`
+	// Chatter is the pet talking to itself when nobody has sent it anything.
+	Chatter Chatter `yaml:"chatter" json:"chatter"`
+}
+
+// Chatter is what the pet says of its own accord between messages.
+type Chatter struct {
+	// Enabled is off by default. A pet that starts talking unprompted is a
+	// surprise, so it is asked for rather than assumed.
+	Enabled bool `yaml:"enabled" json:"enabled"`
+	// IntervalSec is roughly how long between remarks. Roughly, because the
+	// wait is varied either side of it: exactly the same gap every time sounds
+	// like a machine.
+	IntervalSec float64 `yaml:"interval_sec" json:"interval_sec"`
+	// Source is a file of sayings, one per line. Empty uses the bundled list.
+	Source string `yaml:"source" json:"source"`
 }
 
 // Message controls how long text stays up and how big it is drawn.
@@ -246,6 +261,11 @@ func Default() Config {
 			IdleOpacity: 0.35,
 			Roam:        RoamHorizontal,
 			Speed:       45,
+			Chatter: Chatter{
+				Enabled:     false,
+				IntervalSec: 600,
+				Source:      "",
+			},
 		},
 		Message: Message{
 			DurationSec: 8,
@@ -318,6 +338,9 @@ func (c Config) Validate() error {
 	}
 	if c.Behavior.Speed < 0 {
 		return fmt.Errorf("behavior.speed must not be negative, got %v", c.Behavior.Speed)
+	}
+	if c.Behavior.Chatter.IntervalSec <= 0 {
+		return fmt.Errorf("behavior.chatter.interval_sec must be positive, got %v", c.Behavior.Chatter.IntervalSec)
 	}
 	if c.Message.DurationSec <= 0 {
 		return fmt.Errorf("message.duration_sec must be positive, got %v", c.Message.DurationSec)

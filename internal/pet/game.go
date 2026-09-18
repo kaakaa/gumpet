@@ -11,11 +11,13 @@ import (
 	"fmt"
 	"log/slog"
 	"math"
+	"math/rand/v2"
 	"os"
 	"time"
 
 	"github.com/hajimehoshi/ebiten/v2"
 
+	"github.com/kaakaa/gumpet/internal/chatter"
 	"github.com/kaakaa/gumpet/internal/config"
 	"github.com/kaakaa/gumpet/internal/display"
 	"github.com/kaakaa/gumpet/internal/history"
@@ -52,6 +54,9 @@ type shown struct {
 	msg       message.Message
 	remaining time.Duration
 	balloon   *balloon
+	// idle marks a remark the pet made up itself. It is never recorded, never
+	// queued, and gives way the moment a real message arrives.
+	idle bool
 }
 
 // Game is the Ebitengine game that is gumpet's pet.
@@ -97,6 +102,13 @@ type Game struct {
 	panel      layout.Panel
 	placed     []layout.Point
 	panelDirty bool
+
+	// chatter is the pet talking to itself between messages, or nil when the
+	// setting is off.
+	chatter *chatter.Sayer
+	// chatterSrc is what the current Sayer was built from, so it is only
+	// rebuilt when the settings behind it actually change.
+	chatterSrc config.Chatter
 
 	menu *menu
 	// menuIdle is how long the cursor has been away from the window, which is
@@ -167,6 +179,7 @@ func (g *Game) Update() error {
 	g.ensureFonts()
 	g.drainInbox()
 	g.advanceMessages(dt)
+	g.advanceChatter(dt)
 	if err := g.handleInput(dt); err != nil {
 		return err
 	}
@@ -357,6 +370,10 @@ func (g *Game) advanceMessages(dt time.Duration) {
 	}
 	g.showing = kept
 
+	if len(g.queue) > 0 {
+		g.dropIdleTalk()
+	}
+
 	for len(g.showing) < g.cfg.Message.MaxVisible && len(g.queue) > 0 {
 		msg := g.queue[0]
 		g.queue = g.queue[1:]
@@ -375,6 +392,100 @@ func (g *Game) advanceMessages(dt time.Duration) {
 	if g.panelDirty {
 		g.resetAnimation()
 	}
+}
+
+// advanceChatter lets the pet say something of its own accord.
+//
+// A remark is put straight on screen rather than into the queue: the queue is
+// for messages somebody sent, and a remark must not take a place in it or push
+// a real message out of one. For the same reason it is never recorded — the
+// messages page is a log of what arrived, and filling it with the pet talking
+// to itself would age real messages out of the record.
+func (g *Game) advanceChatter(dt time.Duration) {
+	g.ensureChatter()
+	if g.chatter == nil {
+		return
+	}
+
+	// Anything else on screen or waiting means the pet has better to do. So
+	// does an open menu: interrupting someone reading it would be rude.
+	quiet := len(g.showing) == 0 && len(g.queue) == 0 && g.menu == nil
+	text, ok := g.chatter.Tick(dt, quiet)
+	if !ok {
+		return
+	}
+
+	g.showing = append(g.showing, shown{
+		msg:       message.Message{Text: text, Level: message.LevelInfo},
+		remaining: time.Duration(g.cfg.Message.DurationSec * float64(time.Second)),
+		idle:      true,
+	})
+	g.panelDirty = true
+	g.resetAnimation()
+}
+
+// ensureChatter builds the Sayer when the settings behind it change, and drops
+// it when the feature is off.
+//
+// In "on-message" mode the pet is hidden until something arrives, so a remark
+// would summon it onto the screen and defeat the mode. It stays quiet there
+// whatever the chatter setting says.
+func (g *Game) ensureChatter() {
+	want := g.cfg.Behavior.Chatter
+	if !want.Enabled || g.cfg.Behavior.Mode == config.ModeOnMessage {
+		g.chatter, g.chatterSrc = nil, config.Chatter{}
+		return
+	}
+	if g.chatter != nil && g.chatterSrc == want {
+		return
+	}
+
+	sayings, from := g.sayings(want.Source)
+	g.chatterSrc = want
+	g.chatter = chatter.New(
+		sayings,
+		time.Duration(want.IntervalSec*float64(time.Second)),
+		rand.New(rand.NewPCG(rand.Uint64(), rand.Uint64())),
+	)
+	g.log.Info("idle chatter on", "sayings", len(sayings), "from", from,
+		"every", time.Duration(want.IntervalSec*float64(time.Second)))
+}
+
+// sayings reads the configured file, falling back to the bundled list. A
+// missing or unreadable file is worth a line in the log and nothing more: the
+// pet should carry on talking, not stop working over a list of proverbs.
+func (g *Game) sayings(path string) ([]string, string) {
+	if path == "" {
+		return chatter.Bundled(), "the bundled list"
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		g.log.Error("could not read the sayings file, using the bundled list",
+			"path", path, "error", err)
+		return chatter.Bundled(), "the bundled list"
+	}
+	sayings := chatter.Parse(data)
+	if len(sayings) == 0 {
+		g.log.Error("the sayings file has nothing in it, using the bundled list", "path", path)
+		return chatter.Bundled(), "the bundled list"
+	}
+	return sayings, path
+}
+
+// dropIdleTalk takes down anything the pet was saying to itself. A message
+// somebody actually sent takes the screen back at once rather than queueing
+// behind a proverb.
+func (g *Game) dropIdleTalk() {
+	kept := g.showing[:0]
+	for _, s := range g.showing {
+		if !s.idle {
+			kept = append(kept, s)
+		}
+	}
+	if len(kept) != len(g.showing) {
+		g.panelDirty = true
+	}
+	g.showing = kept
 }
 
 // dismiss takes one balloon off the screen early. Whatever is next in the
