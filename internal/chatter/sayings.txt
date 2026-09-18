@@ -5,30 +5,49 @@
 # replace the lot — this one is only here so the feature does something on a
 # fresh install.
 #
-# These are Japanese proverbs, which are nobody's to own and short enough to
-# read in the second and a half a balloon is up.
+# Mostly philosophers, who are long out of copyright and reliably quotable, and
+# a few musicians who said something worth repeating. Quotes are given in the
+# forms they are usually circulated in; the rock ones especially are hard to
+# source to a particular interview, so treat the wording as approximate.
+#
+# No song lyrics. A line from a song is somebody's work, not a saying.
 
-継続は力なり
-石の上にも三年
-急がば回れ
-塵も積もれば山となる
-七転び八起き
-千里の道も一歩から
-初心忘るべからず
-案ずるより産むが易し
-好きこそものの上手なれ
-人事を尽くして天命を待つ
-猿も木から落ちる
-灯台下暗し
-一期一会
-論より証拠
-習うより慣れろ
-果報は寝て待て
-転ばぬ先の杖
-明日は明日の風が吹く
-能ある鷹は爪を隠す
-急いては事を仕損じる
-待てば海路の日和あり
-二兎を追う者は一兎をも得ず
-虎穴に入らずんば虎子を得ず
-雨降って地固まる
+# --- 深淵を覗く側 ---------------------------------------------------------
+怪物と戦う者は、自らも怪物とならぬよう心せよ — ニーチェ
+深淵を覗くとき、深淵もまたこちらを覗いている — ニーチェ
+人間は克服されなければならない何ものかである — ニーチェ
+なぜ生きるかを知っている者は、ほとんどあらゆる如何に生きるかに耐える — ニーチェ
+
+# --- 語り得ぬもの ---------------------------------------------------------
+語り得ぬものについては、沈黙しなければならない — ウィトゲンシュタイン
+私の言語の限界が、私の世界の限界を意味する — ウィトゲンシュタイン
+哲学の目的は、思考の論理的明晰化である — ウィトゲンシュタイン
+
+# --- 流れるもの -----------------------------------------------------------
+万物は流転する — ヘラクレイトス
+同じ川に二度入ることはできない — ヘラクレイトス
+争いは万物の父である — ヘラクレイトス
+
+# --- 石を押し上げる -------------------------------------------------------
+シーシュポスが幸福であると想像しなければならない — カミュ
+人間は自由の刑に処せられている — サルトル
+人生は後ろ向きにしか理解できないが、前を向いてしか生きられない — キェルケゴール
+不安とは自由のめまいである — キェルケゴール
+
+# --- 実務家たち -----------------------------------------------------------
+我々は短い人生を受けたのではない。我々がそれを短くしているのだ — セネカ
+最良の復讐は、相手と同じようにならないことだ — マルクス・アウレリウス
+人を乱すのは出来事ではなく、出来事についての考えである — エピクテトス
+そこをどいてくれ、日が当たらない — ディオゲネス
+吟味されざる生に、生きる値打ちはない — ソクラテス
+
+# --- 意志と表象 -----------------------------------------------------------
+人は自分の意志することはできるが、意志することを意志することはできない — ショーペンハウアー
+孤独は山になく、街にある — 三木清
+純粋経験を唯一の実在としてすべてを説明してみたい — 西田幾多郎
+
+# --- 音を出す側 -----------------------------------------------------------
+Without deviation from the norm, progress is not possible. — Frank Zappa
+So many books, so little time. — Frank Zappa
+If you think you are too old to rock'n'roll, then you are. — Lemmy Kilmister
+If you're going to kick authority in the teeth, you might as well use both feet. — Keith Richards
