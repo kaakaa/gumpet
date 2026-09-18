@@ -348,6 +348,23 @@
           skipped. Leave empty for the list gumpet ships with.
         </p>
       </div>
+      <div class="row">
+        <label for="chatter-feed">Or a feed</label>
+        <input type="text" id="chatter-feed" data-path="behavior.chatter.feed" placeholder="https://news.ycombinator.com/rss">
+        <p class="hint">
+          An RSS or Atom URL. The pet reads out headlines instead of the
+          sayings above, and the link under each one is clickable.
+          <strong>This is the only part of gumpet that connects out to
+          anywhere.</strong> Empty means it makes no outgoing requests at all.
+          Only http and https, and only the headlines &mdash; never the
+          articles.
+        </p>
+      </div>
+      <div class="row">
+        <label for="chatter-fetch">Re-read the feed</label>
+        <input type="number" id="chatter-fetch" data-path="behavior.chatter.fetch_interval_sec" data-kind="float" min="1" step="60">
+        <p class="hint">Seconds between fetches. No reason to fetch once per remark.</p>
+      </div>
     </section>
 
     <section>

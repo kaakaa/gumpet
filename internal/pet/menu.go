@@ -183,7 +183,7 @@ const menuAutoCloseAfter = 3 * time.Second
 // asks for.
 func (g *Game) handleInput(dt time.Duration) error {
 	if g.passthrough {
-		g.menu, g.hovered = nil, false
+		g.menu, g.hovered, g.reading = nil, false, false
 		g.cursor.Reset()
 		return nil
 	}
@@ -211,6 +211,7 @@ func (g *Game) handleInput(dt time.Duration) error {
 		onPet || onBalloon >= 0,
 		dt,
 	)
+	g.reading = g.hovered && onBalloon >= 0
 
 	if g.menu != nil {
 		if g.overWindow(px, py) {

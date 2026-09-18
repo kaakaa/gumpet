@@ -8,6 +8,7 @@
 package pet
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"math"
@@ -20,6 +21,7 @@ import (
 	"github.com/kaakaa/gumpet/internal/chatter"
 	"github.com/kaakaa/gumpet/internal/config"
 	"github.com/kaakaa/gumpet/internal/display"
+	"github.com/kaakaa/gumpet/internal/feed"
 	"github.com/kaakaa/gumpet/internal/history"
 	"github.com/kaakaa/gumpet/internal/hover"
 	"github.com/kaakaa/gumpet/internal/layout"
@@ -109,6 +111,14 @@ type Game struct {
 	// chatterSrc is what the current Sayer was built from, so it is only
 	// rebuilt when the settings behind it actually change.
 	chatterSrc config.Chatter
+	// headlines carries what the feed reader found back to the game loop. The
+	// fetch runs in its own goroutine and the loop only ever reads this, which
+	// is why neither of them needs a lock.
+	headlines chan []string
+	// fetching stops a second fetch being started while one is in flight, and
+	// fetchWait counts down to the next one.
+	fetching  bool
+	fetchWait time.Duration
 
 	menu *menu
 	// menuIdle is how long the cursor has been away from the window, which is
@@ -118,6 +128,10 @@ type Game struct {
 	// one of its balloons, can be clicked. [hover.Tracker] decides: a cursor
 	// merely lying where the pet wandered does not count.
 	hovered bool
+	// reading says the cursor is being held on a balloon, which stops the
+	// countdown: a message being read should not vanish mid-sentence, and a
+	// link cannot be clicked if it disappears while being aimed at.
+	reading bool
 	cursor  hover.Tracker
 
 	started bool
@@ -130,16 +144,19 @@ type Game struct {
 func New(o Options) *Game {
 	cfg := o.Store.Get()
 	g := &Game{
-		store:       o.Store,
-		cfg:         cfg,
-		updates:     o.Store.Subscribe(8),
-		pack:        o.Pack,
-		inbox:       o.Inbox,
-		history:     o.History,
-		quit:        o.Quit,
-		log:         o.Log,
-		version:     o.Version,
-		debug:       os.Getenv("GUMPET_DEBUG") != "",
+		store:   o.Store,
+		cfg:     cfg,
+		updates: o.Store.Subscribe(8),
+		pack:    o.Pack,
+		inbox:   o.Inbox,
+		history: o.History,
+		quit:    o.Quit,
+		log:     o.Log,
+		version: o.Version,
+		debug:   os.Getenv("GUMPET_DEBUG") != "",
+		// Buffered, so a fetch that lands while the loop is elsewhere does not
+		// leave its goroutine parked on the send.
+		headlines:   make(chan []string, 1),
 		deviceScale: 1,
 		passthrough: cfg.Window.ClickThrough,
 	}
@@ -180,6 +197,7 @@ func (g *Game) Update() error {
 	g.drainInbox()
 	g.advanceMessages(dt)
 	g.advanceChatter(dt)
+	g.advanceFeed(dt)
 	if err := g.handleInput(dt); err != nil {
 		return err
 	}
@@ -359,16 +377,21 @@ func (g *Game) enqueue(msg message.Message) {
 // the queue, oldest first. Several can be up at once: a burst that arrives
 // together is shown together rather than made to queue politely.
 func (g *Game) advanceMessages(dt time.Duration) {
-	kept := g.showing[:0]
-	for _, s := range g.showing {
-		if s.remaining -= dt; s.remaining > 0 {
-			kept = append(kept, s)
+	// The whole stack is held, not just the balloon under the cursor: someone
+	// reading one of them is reading the pile, and having the others time out
+	// from under it would shuffle the stack while they read.
+	if !g.reading {
+		kept := g.showing[:0]
+		for _, s := range g.showing {
+			if s.remaining -= dt; s.remaining > 0 {
+				kept = append(kept, s)
+			}
 		}
+		if len(kept) != len(g.showing) {
+			g.panelDirty = true
+		}
+		g.showing = kept
 	}
-	if len(kept) != len(g.showing) {
-		g.panelDirty = true
-	}
-	g.showing = kept
 
 	if len(g.queue) > 0 {
 		g.dropIdleTalk()
@@ -447,8 +470,60 @@ func (g *Game) ensureChatter() {
 		time.Duration(want.IntervalSec*float64(time.Second)),
 		rand.New(rand.NewPCG(rand.Uint64(), rand.Uint64())),
 	)
+	if want.Feed != "" {
+		// Nothing is fetched yet: the pet talks from the local list until the
+		// first fetch lands, rather than standing mute waiting for a network
+		// round trip.
+		from = want.Feed + " (not fetched yet)"
+		g.fetchWait = 0
+	}
 	g.log.Info("idle chatter on", "sayings", len(sayings), "from", from,
 		"every", time.Duration(want.IntervalSec*float64(time.Second)))
+}
+
+// advanceFeed re-reads the configured feed now and then, in the background.
+//
+// The game loop must not wait for the network, so the fetch runs in a
+// goroutine and posts its result to a channel that the loop drains. A fetch
+// that fails, hangs or returns rubbish costs the pet nothing: it goes on
+// saying whatever it already had.
+func (g *Game) advanceFeed(dt time.Duration) {
+	cfg := g.cfg.Behavior.Chatter
+
+	select {
+	case sayings := <-g.headlines:
+		g.fetching = false
+		if len(sayings) > 0 && g.chatter != nil {
+			g.chatter.SetSayings(sayings)
+			g.log.Info("read the feed", "headlines", len(sayings), "feed", cfg.Feed)
+		}
+	default:
+	}
+
+	if !cfg.Enabled || cfg.Feed == "" || g.chatter == nil || g.fetching {
+		return
+	}
+	if g.fetchWait -= dt; g.fetchWait > 0 {
+		return
+	}
+	g.fetchWait = time.Duration(cfg.FetchIntervalSec * float64(time.Second))
+	g.fetching = true
+
+	url := cfg.Feed
+	log := g.log
+	out := g.headlines
+	go func() {
+		items, err := feed.NewFetcher().Fetch(context.Background(), url)
+		if err != nil {
+			// One line and carry on. A feed being down is not the pet's
+			// problem, and it will be tried again at the next interval.
+			log.Error("could not read the feed, keeping the current sayings",
+				"feed", url, "error", err)
+			out <- nil
+			return
+		}
+		out <- feed.Sayings(items)
+	}()
 }
 
 // sayings reads the configured file, falling back to the bundled list. A
