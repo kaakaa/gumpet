@@ -11,6 +11,7 @@
 package feed
 
 import (
+	"bytes"
 	"context"
 	"encoding/xml"
 	"fmt"
@@ -21,6 +22,10 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"golang.org/x/text/encoding"
+	"golang.org/x/text/encoding/charmap"
+	"golang.org/x/text/encoding/japanese"
 )
 
 // MaxBody is how much of a feed is read before giving up. Feeds are tens of
@@ -61,6 +66,19 @@ type rss struct {
 	} `xml:"channel>item"`
 }
 
+// rdf is RSS 1.0, where items are siblings of the channel rather than children
+// of it. It is still widely served — Hatena Bookmark, among others — and looks
+// enough like RSS 2.0 that the difference is easy to miss and total: nothing
+// at all is found rather than something slightly wrong.
+type rdf struct {
+	Items []struct {
+		Title string `xml:"title"`
+		Link  string `xml:"link"`
+		// RSS 1.0 dates its items with Dublin Core rather than pubDate.
+		Date string `xml:"date"`
+	} `xml:"item"`
+}
+
 type atom struct {
 	Entries []struct {
 		Title string `xml:"title"`
@@ -82,7 +100,7 @@ type atom struct {
 // root element name that half the feeds in the world get creative with.
 func Parse(data []byte) ([]Item, error) {
 	var r rss
-	if err := xml.Unmarshal(data, &r); err == nil && len(r.Items) > 0 {
+	if err := decode(data, &r); err == nil && len(r.Items) > 0 {
 		out := make([]Item, 0, len(r.Items))
 		for _, it := range r.Items {
 			if item, ok := clean(it.Title, it.Link, firstOf(it.PubDate, it.Date)); ok {
@@ -94,8 +112,23 @@ func Parse(data []byte) ([]Item, error) {
 		}
 	}
 
+	// RSS 1.0 before Atom: its items are named the same as RSS 2.0's, so it is
+	// the nearer neighbour, and an Atom document has no <item> to confuse it.
+	var d rdf
+	if err := decode(data, &d); err == nil && len(d.Items) > 0 {
+		out := make([]Item, 0, len(d.Items))
+		for _, it := range d.Items {
+			if item, ok := clean(it.Title, it.Link, it.Date); ok {
+				out = append(out, item)
+			}
+		}
+		if len(out) > 0 {
+			return out, nil
+		}
+	}
+
 	var a atom
-	if err := xml.Unmarshal(data, &a); err != nil {
+	if err := decode(data, &a); err != nil {
 		return nil, fmt.Errorf("parse feed: %w", err)
 	}
 	out := make([]Item, 0, len(a.Entries))
@@ -108,6 +141,52 @@ func Parse(data []byte) ([]Item, error) {
 		return nil, fmt.Errorf("parse feed: no usable items")
 	}
 	return out, nil
+}
+
+// decode unmarshals XML that may not be UTF-8. encoding/xml refuses any other
+// declared encoding unless it is told how to read one, and plenty of feeds
+// still declare Latin-1 or Shift_JIS.
+func decode(data []byte, v any) error {
+	dec := xml.NewDecoder(bytes.NewReader(data))
+	dec.CharsetReader = charsetReader
+	return dec.Decode(v)
+}
+
+// charsets are the declared encodings worth handling: the Latin ones that turn
+// up on older English-language feeds, and the two Japanese ones still served by
+// sites that predate UTF-8.
+var charsets = map[string]encoding.Encoding{
+	"iso-8859-1":   charmap.ISO8859_1,
+	"iso8859-1":    charmap.ISO8859_1,
+	"latin1":       charmap.ISO8859_1,
+	"iso-8859-15":  charmap.ISO8859_15,
+	"windows-1252": charmap.Windows1252,
+	"cp1252":       charmap.Windows1252,
+	"shift_jis":    japanese.ShiftJIS,
+	"shift-jis":    japanese.ShiftJIS,
+	"sjis":         japanese.ShiftJIS,
+	"x-sjis":       japanese.ShiftJIS,
+	"windows-31j":  japanese.ShiftJIS,
+	"cp932":        japanese.ShiftJIS,
+	"euc-jp":       japanese.EUCJP,
+	"eucjp":        japanese.EUCJP,
+	"iso-2022-jp":  japanese.ISO2022JP,
+}
+
+func charsetReader(label string, input io.Reader) (io.Reader, error) {
+	name := strings.ToLower(strings.TrimSpace(label))
+	switch name {
+	case "", "utf-8", "utf8", "us-ascii", "ascii":
+		return input, nil
+	}
+	enc, ok := charsets[name]
+	if !ok {
+		return nil, fmt.Errorf("feed declares an encoding gumpet cannot read: %q", label)
+	}
+	// Decoded leniently: a feed whose bytes do not match the encoding it
+	// declared is a real thing, and a headline with one wrong character in it
+	// is better than no feed at all.
+	return enc.NewDecoder().Reader(input), nil
 }
 
 // atomLink picks the entry's page. Atom entries carry several links; the

@@ -454,3 +454,153 @@ func TestFetchAllDropsAFeedWithNothingRecent(t *testing.T) {
 		t.Errorf("group = %q, want news", groups[0].Name)
 	}
 }
+
+// hatena is trimmed from the real Hatena Bookmark feed: RSS 1.0, where items
+// are siblings of the channel rather than children of it, and dates are
+// Dublin Core rather than pubDate.
+const hatena = `<?xml version="1.0" encoding="UTF-8"?>
+<rdf:RDF
+ xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+ xmlns="http://purl.org/rss/1.0/"
+ xmlns:dc="http://purl.org/dc/elements/1.1/"
+ xmlns:hatena="http://www.hatena.ne.jp/info/xmlns#">
+<channel rdf:about="https://b.hatena.ne.jp/hotentry/it">
+  <title>はてなブックマーク</title>
+  <link>https://b.hatena.ne.jp/hotentry/it</link>
+  <items><rdf:Seq><rdf:li rdf:resource="https://example.com/a"/></rdf:Seq></items>
+</channel>
+<item rdf:about="https://example.com/a">
+  <title>RSS 1.0 の記事</title>
+  <link>https://example.com/a</link>
+  <dc:date>2026-09-19T09:00:00+09:00</dc:date>
+</item>
+<item rdf:about="https://example.com/b">
+  <title>もう一件</title>
+  <link>https://example.com/b</link>
+  <dc:date>2026-09-18T12:00:00+09:00</dc:date>
+</item>
+</rdf:RDF>`
+
+func TestParseReadsRSS1(t *testing.T) {
+	items, err := Parse([]byte(hatena))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if len(items) != 2 {
+		t.Fatalf("got %d items, want 2: %+v", len(items), items)
+	}
+	if items[0].Title != "RSS 1.0 の記事" {
+		t.Errorf("title = %q", items[0].Title)
+	}
+	if items[0].Link != "https://example.com/a" {
+		t.Errorf("link = %q", items[0].Link)
+	}
+	// The channel's own title and link must not be mistaken for an item.
+	for _, it := range items {
+		if it.Link == "https://b.hatena.ne.jp/hotentry/it" {
+			t.Errorf("the channel itself came back as an item: %+v", it)
+		}
+	}
+}
+
+// Without a date the age filter cannot work, and RSS 1.0 puts it somewhere
+// RSS 2.0 does not.
+func TestParseReadsDublinCoreDates(t *testing.T) {
+	items, err := Parse([]byte(hatena))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	want := time.Date(2026, 9, 19, 9, 0, 0, 0, time.FixedZone("", 9*3600))
+	if !items[0].Published.Equal(want) {
+		t.Errorf("published = %v, want %v", items[0].Published, want)
+	}
+	if items[1].Published.IsZero() {
+		t.Error("second item has no date")
+	}
+}
+
+// latin1Feed declares ISO-8859-1 and holds bytes that are not valid UTF-8, so
+// it fails outright without a CharsetReader.
+var latin1Feed = func() []byte {
+	// 0xE9 is é in Latin-1, 0xF6 is ö.
+	body := "<?xml version=\"1.0\" encoding=\"ISO-8859-1\"?>" +
+		"<rss version=\"2.0\"><channel><item>" +
+		"<title>Caf\xe9 and G\xf6del</title>" +
+		"<link>https://example.com/x</link>" +
+		"</item></channel></rss>"
+	return []byte(body)
+}()
+
+func TestParseReadsLatin1(t *testing.T) {
+	items, err := Parse(latin1Feed)
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if items[0].Title != "Café and Gödel" {
+		t.Errorf("title = %q, want the accents decoded", items[0].Title)
+	}
+}
+
+func TestParseReadsShiftJIS(t *testing.T) {
+	// "日本語" in Shift_JIS.
+	title := "\x93\xfa\x96{\x8c\xea"
+	body := "<?xml version=\"1.0\" encoding=\"Shift_JIS\"?>" +
+		"<rss version=\"2.0\"><channel><item>" +
+		"<title>" + title + "</title>" +
+		"<link>https://example.com/x</link>" +
+		"</item></channel></rss>"
+
+	items, err := Parse([]byte(body))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if items[0].Title != "日本語" {
+		t.Errorf("title = %q, want 日本語", items[0].Title)
+	}
+}
+
+func TestParseReadsEUCJP(t *testing.T) {
+	// "日本語" in EUC-JP.
+	title := "\xc6\xfc\xcb\xdc\xb8\xec"
+	body := "<?xml version=\"1.0\" encoding=\"EUC-JP\"?>" +
+		"<rss version=\"2.0\"><channel><item>" +
+		"<title>" + title + "</title>" +
+		"<link>https://example.com/x</link>" +
+		"</item></channel></rss>"
+
+	items, err := Parse([]byte(body))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if items[0].Title != "日本語" {
+		t.Errorf("title = %q, want 日本語", items[0].Title)
+	}
+}
+
+func TestParseRefusesAnEncodingItCannotRead(t *testing.T) {
+	body := `<?xml version="1.0" encoding="EBCDIC-CP-BE"?>` +
+		`<rss version="2.0"><channel><item><title>x</title>` +
+		`<link>https://example.com/x</link></item></channel></rss>`
+
+	if _, err := Parse([]byte(body)); err == nil {
+		t.Error("Parse accepted an encoding it cannot read, want an error")
+	}
+}
+
+// The formats already working must keep working, which is the real risk in
+// adding a third one and a decoding step.
+func TestTheOtherFormatsStillParse(t *testing.T) {
+	for name, data := range map[string][]byte{
+		"rss 2.0": []byte(hackerNews),
+		"atom":    []byte(atomFeed),
+	} {
+		items, err := Parse(data)
+		if err != nil {
+			t.Errorf("%s: Parse: %v", name, err)
+			continue
+		}
+		if len(items) == 0 {
+			t.Errorf("%s: no items", name)
+		}
+	}
+}
