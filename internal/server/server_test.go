@@ -18,6 +18,7 @@ import (
 	"github.com/kaakaa/gumpet/internal/display"
 	"github.com/kaakaa/gumpet/internal/history"
 	"github.com/kaakaa/gumpet/internal/message"
+	"github.com/kaakaa/gumpet/internal/petsrc"
 	"github.com/kaakaa/gumpet/internal/settings"
 )
 
@@ -798,5 +799,54 @@ func TestConfigCarriesAnEmptyFeedListRatherThanNull(t *testing.T) {
 	}
 	if !strings.Contains(rec.Body.String(), `"feeds":[]`) {
 		t.Errorf("response does not carry an empty feeds list: %s", rec.Body)
+	}
+}
+
+// The settings page builds its pet picker from this, so it has to name every
+// bundled pet rather than a list written out by hand in the HTML.
+func TestConfigCarriesTheBundledPets(t *testing.T) {
+	s, _, _ := newTestServerWithConfig(t, config.Default(), 1)
+
+	rec := do(t, s, http.MethodGet, "/api/v1/config", "", "", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d, want 200", rec.Code)
+	}
+	var got struct {
+		Pets []struct {
+			Name  string `json:"name"`
+			Label string `json:"label"`
+		} `json:"pets"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if len(got.Pets) != len(petsrc.Builtins) {
+		t.Fatalf("listed %d pets, want %d", len(got.Pets), len(petsrc.Builtins))
+	}
+	for i, p := range got.Pets {
+		if p.Name != petsrc.Builtins[i].Name || p.Label != petsrc.Builtins[i].Label {
+			t.Errorf("pets[%d] = %+v, want %+v", i, p, petsrc.Builtins[i])
+		}
+		if p.Label == "" {
+			t.Errorf("pets[%d] has no label to show", i)
+		}
+	}
+}
+
+// Every name the page offers has to be one the config will accept, or picking
+// a pet from the list would be rejected on save.
+func TestEveryOfferedPetIsAValidSetting(t *testing.T) {
+	s, _, updates := newTestServerWithConfig(t, config.Default(), 1)
+
+	for _, pet := range petsrc.Builtins {
+		body := `{"pet":{"source":"` + pet.Name + `"}}`
+		rec := do(t, s, http.MethodPut, "/api/v1/config", "application/json", body, nil)
+		if rec.Code != http.StatusOK {
+			t.Errorf("saving %q: status %d: %s", pet.Name, rec.Code, rec.Body)
+			continue
+		}
+		if got := (<-updates).Pet.Source; got != pet.Name {
+			t.Errorf("saved %q, got %q", pet.Name, got)
+		}
 	}
 }

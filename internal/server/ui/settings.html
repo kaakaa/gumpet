@@ -274,11 +274,28 @@
     <section>
       <h2>Pet</h2>
       <div class="row">
+        <label for="pet-pick">Pet</label>
+        <select id="pet-pick"></select>
+        <p class="hint">The pets gumpet ships with, or artwork of your own.</p>
+      </div>
+      <div class="row" id="source-row">
         <label for="source">Artwork</label>
         <input type="text" id="source" data-path="pet.source" placeholder="(the built-in gopher)" spellcheck="false">
         <p class="hint">
           Path to a PNG, JPEG, animated GIF, or a directory of frames played in
-          file-name order. Leave empty for the bundled gopher.
+          file-name order.
+        </p>
+      </div>
+      <div class="row">
+        <label for="smooth">Enlarging</label>
+        <select id="smooth" data-path="pet.smooth">
+          <option value="auto">Let the artwork decide</option>
+          <option value="on">Smooth</option>
+          <option value="off">Keep the edges hard</option>
+        </select>
+        <p class="hint">
+          Pixel art wants hard edges &mdash; smoothing only blurs the squares it
+          is drawn from. The bundled pets already know which they are.
         </p>
       </div>
       <div class="row">
@@ -631,6 +648,35 @@
     });
   }
 
+  // fillPets offers the bundled pets plus "Custom", which reveals the path
+  // field. The path field stays the one source of truth: the picker only
+  // writes into it, so there is never a second opinion about which pet is on.
+  function fillPets(pets) {
+    var sel = $("pet-pick");
+    sel.textContent = "";
+    (pets || []).forEach(function (p) {
+      var o = document.createElement("option");
+      o.value = p.name;
+      o.textContent = p.label;
+      sel.appendChild(o);
+    });
+    var custom = document.createElement("option");
+    custom.value = "\u0000custom";
+    custom.textContent = "Custom\u2026";
+    sel.appendChild(custom);
+  }
+
+  // syncPet points the picker at whatever the path field holds.
+  function syncPet() {
+    var sel = $("pet-pick");
+    var value = $("source").value;
+    var names = Array.prototype.map.call(sel.options, function (o) { return o.value; });
+
+    if (value === "" && names.length > 0) { value = names[0]; }
+    sel.value = names.indexOf(value) >= 0 ? value : "\u0000custom";
+    $("source-row").hidden = sel.value !== "\u0000custom";
+  }
+
   function fill(cfg) {
     fields.forEach(function (el) {
       var value = get(cfg, el.dataset.path);
@@ -642,6 +688,7 @@
         el.value = value;
       }
     });
+    syncPet();
     syncEnabled();
   }
 
@@ -730,6 +777,7 @@
     loaded = data.config;
     $("path").textContent = data.path;
     fillMonitors(data.monitors, loaded.stage.display);
+    fillPets(data.pets);
     if (data.restart_required && data.restart_required.length) {
       document.querySelectorAll("[data-restart]").forEach(function (el) {
         el.title = "Takes effect the next time gumpet starts";
@@ -812,6 +860,18 @@
   window.addEventListener("focus", function () {
     if (loaded !== null && !dirty()) { load(); }
   });
+  // Picking a bundled pet writes its name into the path field, which is what
+  // actually gets saved. Choosing Custom empties it and shows the field, so
+  // there is somewhere to type.
+  $("pet-pick").addEventListener("change", function () {
+    var picked = $("pet-pick").value;
+    $("source").value = picked === "\u0000custom" ? "" : picked;
+    $("source-row").hidden = picked !== "\u0000custom";
+    refreshButtons();
+    if (picked === "\u0000custom") { $("source").focus(); }
+  });
+  $("source").addEventListener("input", syncPet);
+
   $("anchor").addEventListener("change", syncEnabled);
   $("fullscreen").addEventListener("change", syncEnabled);
   $("mode").addEventListener("change", syncEnabled);

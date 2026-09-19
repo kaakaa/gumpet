@@ -32,6 +32,15 @@ type Frame struct {
 type Source struct {
 	// Name identifies the source in log messages.
 	Name string
+	// Scale is how much this artwork wants to be enlarged before pet.scale is
+	// applied, so that "1" means the same thing to someone choosing a pet
+	// whatever its artwork happens to measure. A sprite drawn at twelve pixels
+	// and an illustration drawn at five thousand should not need the setting
+	// changed between them.
+	Scale float64
+	// Smooth is whether enlarging this artwork should be smoothed. Pixel art
+	// says no: for it, sharp edges are the drawing.
+	Smooth bool
 	// Walk is the idle/walking animation, and always has at least one frame.
 	Walk []Frame
 	// Talk is played while a message is up. It may be empty, in which case
@@ -44,12 +53,52 @@ type Source struct {
 // builtinFrames are the gopher's walk cycle, bundled with gumpet.
 var builtinFrames = []string{"gopher/out01.png", "gopher/out02.png", "gopher/out03.png"}
 
+// Builtins are the pets gumpet ships with, in the order they are offered.
+//
+// A name here beats a path of the same spelling. The names have no separator
+// and no extension, so a file that collides with one has to have been asked
+// for by a path that says so — "./pink" rather than "pink".
+var Builtins = []Pet{
+	{Name: "gopher", Label: "Gopher", Scale: 1, Smooth: true},
+	{Name: "pixel", Label: "Pixel", file: "pixel/gopher.gif", Scale: 1, Smooth: false},
+	{Name: "blue", Label: "Blue", file: "blue/gopher.png", Scale: 1, Smooth: true},
+	{Name: "strawhat", Label: "Straw hat", file: "strawhat/gopher.png", Scale: 1, Smooth: true},
+	{Name: "pink", Label: "Pink", file: "pink/gopher.png", Scale: 1, Smooth: true},
+}
+
+// Pet is one of the bundled pets.
+type Pet struct {
+	// Name is what goes in pet.source.
+	Name string
+	// Label is what the menu and the settings page show.
+	Label string
+	// Scale and Smooth are this artwork's own idea of how it should be drawn.
+	Scale  float64
+	Smooth bool
+	// file is the path inside the embedded assets. Empty means the original
+	// gopher, which is several files rather than one.
+	file string
+}
+
+// BuiltinNamed finds a bundled pet by the name written in pet.source.
+func BuiltinNamed(name string) (Pet, bool) {
+	for _, p := range Builtins {
+		if p.Name == name {
+			return p, true
+		}
+	}
+	return Pet{}, false
+}
+
 // Load reads the artwork named by a config's pet.source. An empty source means
 // the bundled gopher; otherwise it is a PNG/JPEG, an animated GIF, or a
 // directory of frame images.
 func Load(source string) (*Source, error) {
 	if source == "" {
 		return Builtin()
+	}
+	if pet, ok := BuiltinNamed(source); ok {
+		return loadBuiltin(pet)
 	}
 	fi, err := os.Stat(source)
 	if err != nil {
@@ -68,7 +117,8 @@ func Validate(source string) error {
 	return err
 }
 
-// Builtin is the gopher gumpet ships with.
+// Builtin is the gopher gumpet ships with, and the pet used when nothing is
+// configured.
 func Builtin() (*Source, error) {
 	walk := make([]Frame, 0, len(builtinFrames))
 	for _, name := range builtinFrames {
@@ -78,7 +128,51 @@ func Builtin() (*Source, error) {
 		}
 		walk = append(walk, Frame{Image: img})
 	}
-	return &Source{Name: "gopher (built-in)", Walk: walk, Size: walk[0].Bounds().Size()}, nil
+	return &Source{
+		Name:   "gopher (built-in)",
+		Walk:   walk,
+		Size:   walk[0].Bounds().Size(),
+		Scale:  1,
+		Smooth: true,
+	}, nil
+}
+
+// loadBuiltin reads one of the bundled pets out of the embedded assets.
+func loadBuiltin(pet Pet) (*Source, error) {
+	if pet.file == "" {
+		return Builtin()
+	}
+
+	f, err := assets.Pets.Open(pet.file)
+	if err != nil {
+		return nil, fmt.Errorf("open bundled pet %s: %w", pet.Name, err)
+	}
+	defer f.Close()
+
+	var frames []Frame
+	if strings.EqualFold(filepath.Ext(pet.file), ".gif") {
+		decoded, err := gifseq.Decode(f)
+		if err != nil {
+			return nil, fmt.Errorf("bundled pet %s: %w", pet.Name, err)
+		}
+		for _, d := range decoded {
+			frames = append(frames, Frame{Image: d.Image, Duration: d.Duration})
+		}
+	} else {
+		img, _, err := image.Decode(f)
+		if err != nil {
+			return nil, fmt.Errorf("decode bundled pet %s: %w", pet.Name, err)
+		}
+		frames = []Frame{{Image: img}}
+	}
+
+	return &Source{
+		Name:   pet.Name + " (built-in)",
+		Walk:   frames,
+		Size:   frames[0].Bounds().Size(),
+		Scale:  pet.Scale,
+		Smooth: pet.Smooth,
+	}, nil
 }
 
 // Bounds is the frame's image bounds, spelled out so callers do not have to
@@ -115,14 +209,14 @@ func loadFile(path string) (*Source, error) {
 		for _, d := range decoded {
 			frames = append(frames, Frame{Image: d.Image, Duration: d.Duration})
 		}
-		return &Source{Name: name, Walk: frames, Size: frames[0].Bounds().Size()}, nil
+		return &Source{Name: name, Walk: frames, Size: frames[0].Bounds().Size(), Scale: 1, Smooth: true}, nil
 	}
 
 	img, _, err := image.Decode(f)
 	if err != nil {
 		return nil, fmt.Errorf("decode %s: %w", name, err)
 	}
-	return &Source{Name: name, Walk: []Frame{{Image: img}}, Size: img.Bounds().Size()}, nil
+	return &Source{Name: name, Walk: []Frame{{Image: img}}, Size: img.Bounds().Size(), Scale: 1, Smooth: true}, nil
 }
 
 // loadDir reads every image in dir as a frame, sorted by file name. Frames
@@ -141,7 +235,7 @@ func loadDir(dir string) (*Source, error) {
 	}
 	sort.Strings(names)
 
-	src := &Source{Name: filepath.Base(dir)}
+	src := &Source{Name: filepath.Base(dir), Scale: 1, Smooth: true}
 	for _, name := range names {
 		img, err := decodeFile(filepath.Join(dir, name))
 		if err != nil {

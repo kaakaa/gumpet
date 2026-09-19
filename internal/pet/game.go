@@ -738,8 +738,20 @@ func (g *Game) frames() []petpack.Frame {
 	return g.pack.Walk
 }
 
-func (g *Game) petWidth() float64  { return float64(g.pack.Size.X) * g.cfg.Pet.Scale }
-func (g *Game) petHeight() float64 { return float64(g.pack.Size.Y) * g.cfg.Pet.Scale }
+// petScale is how much the artwork is enlarged: the setting multiplied by
+// whatever the artwork itself asks for. That is what lets pet.scale mean the
+// same thing across a sprite drawn at twelve pixels and an illustration drawn
+// at two hundred.
+func (g *Game) petScale() float64 {
+	scale := g.pack.Scale
+	if scale <= 0 {
+		scale = 1
+	}
+	return g.cfg.Pet.Scale * scale
+}
+
+func (g *Game) petWidth() float64  { return float64(g.pack.Size.X) * g.petScale() }
+func (g *Game) petHeight() float64 { return float64(g.pack.Size.Y) * g.petScale() }
 
 // hidden reports whether there is nothing to draw, which is how "on-message"
 // mode makes the pet disappear.

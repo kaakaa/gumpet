@@ -165,14 +165,23 @@ func (g *Game) drawPet(screen *ebiten.Image) {
 	frames := g.frames()
 	frame := frames[g.frameIdx%len(frames)]
 
-	op := &ebiten.DrawImageOptions{Filter: ebiten.FilterLinear}
+	// Pixel art is enlarged without smoothing, for the same reason the bundled
+	// bitmap font is: the squares are the drawing, and smoothing them only
+	// blurs what was deliberate. The artwork says which it is, and the setting
+	// can overrule it for artwork gumpet did not ship.
+	filter := ebiten.FilterLinear
+	if !g.cfg.Pet.Smooth.Smoothed(g.pack.Smooth) {
+		filter = ebiten.FilterNearest
+	}
+
+	op := &ebiten.DrawImageOptions{Filter: filter}
 	// In "faded" mode an idle pet is drawn faint rather than not at all.
 	op.ColorScale.ScaleAlpha(float32(g.petOpacity()))
 	if g.walker.FacingRight() && g.cfg.Pet.FlipWhenFacingRight {
 		op.GeoM.Scale(-1, 1)
 		op.GeoM.Translate(float64(frame.Image.Bounds().Dx()), 0)
 	}
-	s := g.cfg.Pet.Scale * g.deviceScale
+	s := g.petScale() * g.deviceScale
 	op.GeoM.Scale(s, s)
 	op.GeoM.Translate(g.win.PetX*g.deviceScale, g.win.PetY*g.deviceScale)
 	screen.DrawImage(frame.Image, op)
