@@ -84,6 +84,16 @@ func (w *Walker) placeRandomly() {
 }
 
 // Pos is the pet's top-left corner, in monitor pixels.
+// Translate moves the pet by a delta without changing anything else about how
+// it is walking. It is for the stage being moved under it — dragging the pet
+// should carry it along rather than merely shifting the walls it bounces off,
+// which would leave it behind until an edge caught up with it.
+func (w *Walker) Translate(dx, dy float64) {
+	w.x += dx
+	w.y += dy
+	w.clamp()
+}
+
 func (w *Walker) Pos() (x, y float64) { return w.x, w.y }
 
 // FacingRight reports which way the pet is looking.
