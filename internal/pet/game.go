@@ -108,13 +108,18 @@ type Game struct {
 	// chatter is the pet talking to itself between messages, or nil when the
 	// setting is off.
 	chatter *chatter.Sayer
+	// localSayings is what the pet says when the feeds have nothing for it:
+	// the file or the bundled list, kept so that falling back does not mean
+	// reading it off disk again.
+	localSayings []chatter.Remark
 	// chatterSrc is what the current Sayer was built from, so it is only
-	// rebuilt when the settings behind it actually change.
+	// rebuilt when the settings behind it actually change. It holds a slice
+	// now, so it is compared field by field rather than with ==.
 	chatterSrc config.Chatter
 	// headlines carries what the feed reader found back to the game loop. The
 	// fetch runs in its own goroutine and the loop only ever reads this, which
 	// is why neither of them needs a lock.
-	headlines chan []string
+	headlines chan [][]chatter.Remark
 	// fetching stops a second fetch being started while one is in flight, and
 	// fetchWait counts down to the next one.
 	fetching  bool
@@ -156,7 +161,7 @@ func New(o Options) *Game {
 		debug:   os.Getenv("GUMPET_DEBUG") != "",
 		// Buffered, so a fetch that lands while the loop is elsewhere does not
 		// leave its goroutine parked on the send.
-		headlines:   make(chan []string, 1),
+		headlines:   make(chan [][]chatter.Remark, 1),
 		deviceScale: 1,
 		passthrough: cfg.Window.ClickThrough,
 	}
@@ -433,13 +438,20 @@ func (g *Game) advanceChatter(dt time.Duration) {
 	// Anything else on screen or waiting means the pet has better to do. So
 	// does an open menu: interrupting someone reading it would be rude.
 	quiet := len(g.showing) == 0 && len(g.queue) == 0 && g.menu == nil
-	text, ok := g.chatter.Tick(dt, quiet)
+	remark, ok := g.chatter.Tick(dt, quiet)
 	if !ok {
 		return
 	}
 
 	g.showing = append(g.showing, shown{
-		msg:       message.Message{Text: text, Level: message.LevelInfo},
+		// The title names the feed a headline came from, so that two feeds
+		// mixed together can still be told apart at a glance. A saying out of
+		// a file has none, and the balloon simply gets no heading.
+		msg: message.Message{
+			Text:  remark.Text,
+			Title: remark.Title,
+			Level: message.LevelInfo,
+		},
 		remaining: time.Duration(g.cfg.Message.DurationSec * float64(time.Second)),
 		idle:      true,
 	})
@@ -459,22 +471,23 @@ func (g *Game) ensureChatter() {
 		g.chatter, g.chatterSrc = nil, config.Chatter{}
 		return
 	}
-	if g.chatter != nil && g.chatterSrc == want {
+	if g.chatter != nil && sameChatter(g.chatterSrc, want) {
 		return
 	}
 
 	sayings, from := g.sayings(want.Source)
+	g.localSayings = sayings
 	g.chatterSrc = want
 	g.chatter = chatter.New(
 		sayings,
 		time.Duration(want.IntervalSec*float64(time.Second)),
 		rand.New(rand.NewPCG(rand.Uint64(), rand.Uint64())),
 	)
-	if want.Feed != "" {
+	if len(want.Feeds) > 0 {
 		// Nothing is fetched yet: the pet talks from the local list until the
 		// first fetch lands, rather than standing mute waiting for a network
 		// round trip.
-		from = want.Feed + " (not fetched yet)"
+		from = fmt.Sprintf("%d feed(s), not fetched yet", len(want.Feeds))
 		g.fetchWait = 0
 	}
 	g.log.Info("idle chatter on", "sayings", len(sayings), "from", from,
@@ -491,16 +504,23 @@ func (g *Game) advanceFeed(dt time.Duration) {
 	cfg := g.cfg.Behavior.Chatter
 
 	select {
-	case sayings := <-g.headlines:
+	case groups := <-g.headlines:
 		g.fetching = false
-		if len(sayings) > 0 && g.chatter != nil {
-			g.chatter.SetSayings(sayings)
-			g.log.Info("read the feed", "headlines", len(sayings), "feed", cfg.Feed)
+		if g.chatter != nil {
+			if len(groups) == 0 {
+				// Every feed was unreachable, or had nothing recent enough.
+				// Go back to the sayings rather than keeping headlines that
+				// are no longer in any feed — silence, or stale news, would
+				// both be worse than a proverb.
+				g.log.Info("no feed had anything to say, falling back to the sayings")
+				groups = [][]chatter.Remark{g.localSayings}
+			}
+			g.chatter.SetGroups(groups)
 		}
 	default:
 	}
 
-	if !cfg.Enabled || cfg.Feed == "" || g.chatter == nil || g.fetching {
+	if !cfg.Enabled || len(cfg.Feeds) == 0 || g.chatter == nil || g.fetching {
 		return
 	}
 	if g.fetchWait -= dt; g.fetchWait > 0 {
@@ -509,27 +529,55 @@ func (g *Game) advanceFeed(dt time.Duration) {
 	g.fetchWait = time.Duration(cfg.FetchIntervalSec * float64(time.Second))
 	g.fetching = true
 
-	url := cfg.Feed
+	// Copied, because the settings can change while the fetch is in flight.
+	feeds := append([]config.Feed(nil), cfg.Feeds...)
+	maxAge := time.Duration(cfg.MaxAgeDays * float64(24*time.Hour))
 	log := g.log
 	out := g.headlines
 	go func() {
-		items, err := feed.NewFetcher().Fetch(context.Background(), url)
-		if err != nil {
-			// One line and carry on. A feed being down is not the pet's
-			// problem, and it will be tried again at the next interval.
-			log.Error("could not read the feed, keeping the current sayings",
-				"feed", url, "error", err)
-			out <- nil
-			return
-		}
-		out <- feed.Sayings(items)
+		out <- fetchAll(feeds, maxAge, log)
 	}()
+}
+
+// fetchAll reads the configured feeds and turns each one's headlines into a
+// group of remarks labelled with that feed's name.
+func fetchAll(feeds []config.Feed, maxAge time.Duration, log *slog.Logger) [][]chatter.Remark {
+	sources := make([]feed.Source, len(feeds))
+	for i, f := range feeds {
+		sources[i] = feed.Source{Name: f.Name, URL: f.URL}
+	}
+
+	var groups [][]chatter.Remark
+	for _, g := range feed.NewFetcher().FetchAll(context.Background(), sources, maxAge, log) {
+		remarks := make([]chatter.Remark, 0, len(g.Items))
+		for _, it := range g.Items {
+			remarks = append(remarks, chatter.Remark{Text: it.Text(), Title: g.Name})
+		}
+		groups = append(groups, remarks)
+	}
+	return groups
+}
+
+// sameChatter reports whether two chatter settings would build the same Sayer.
+// config.Chatter holds a slice, so it cannot be compared with ==.
+func sameChatter(a, b config.Chatter) bool {
+	if a.Enabled != b.Enabled || a.IntervalSec != b.IntervalSec ||
+		a.Source != b.Source || a.FetchIntervalSec != b.FetchIntervalSec ||
+		a.MaxAgeDays != b.MaxAgeDays || len(a.Feeds) != len(b.Feeds) {
+		return false
+	}
+	for i := range a.Feeds {
+		if a.Feeds[i] != b.Feeds[i] {
+			return false
+		}
+	}
+	return true
 }
 
 // sayings reads the configured file, falling back to the bundled list. A
 // missing or unreadable file is worth a line in the log and nothing more: the
 // pet should carry on talking, not stop working over a list of proverbs.
-func (g *Game) sayings(path string) ([]string, string) {
+func (g *Game) sayings(path string) ([]chatter.Remark, string) {
 	if path == "" {
 		return chatter.Bundled(), "the bundled list"
 	}

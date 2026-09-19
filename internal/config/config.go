@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -189,13 +190,61 @@ type Chatter struct {
 	IntervalSec float64 `yaml:"interval_sec" json:"interval_sec"`
 	// Source is a file of sayings, one per line. Empty uses the bundled list.
 	Source string `yaml:"source" json:"source"`
-	// Feed is an RSS or Atom URL whose headlines the pet reads out instead of
-	// the sayings above. Empty, which is the default, means gumpet makes no
+	// Feeds are RSS or Atom sources whose headlines the pet reads out instead
+	// of the sayings above. Empty, which is the default, means gumpet makes no
 	// outgoing connections at all.
-	Feed string `yaml:"feed" json:"feed"`
-	// FetchIntervalSec is how often the feed is re-read. It is separate from
-	// IntervalSec because there is no reason to fetch once per remark.
+	Feeds []Feed `yaml:"feeds" json:"feeds"`
+	// MaxAgeDays drops headlines older than this, so that a podcast archive of
+	// five hundred episodes does not bury this morning's news. Zero keeps
+	// everything. Items a feed did not date are always kept.
+	MaxAgeDays float64 `yaml:"max_age_days" json:"max_age_days"`
+	// FetchIntervalSec is how often the feeds are re-read. It is separate from
+	// IntervalSec because there is no reason to fetch once per remark, and it
+	// is shared by all of them because nobody has wanted otherwise.
 	FetchIntervalSec float64 `yaml:"fetch_interval_sec" json:"fetch_interval_sec"`
+}
+
+// MaxFeeds caps how many sources are read. The limit is not about gumpet: it
+// is about not turning a config file into a way of hitting twenty servers on a
+// timer.
+const MaxFeeds = 10
+
+// MaxFeedName caps a feed's label. It is drawn as the balloon's heading, and a
+// name pasted in from somewhere else should not be able to fill the screen.
+const MaxFeedName = 40
+
+// Feed is one source of headlines.
+type Feed struct {
+	// Name is shown as the heading on the balloon, so a headline says where it
+	// came from. Optional: without one the balloon simply has no heading.
+	Name string `yaml:"name" json:"name"`
+	URL  string `yaml:"url" json:"url"`
+}
+
+// UnmarshalYAML accepts the single `feed: "https://..."` that this setting used
+// to be, so a config written by an older gumpet still loads. It becomes one
+// unnamed entry, and is written back out as a list on the next save.
+func (c *Chatter) UnmarshalYAML(value *yaml.Node) error {
+	// An alias, so decoding into it does not call this method again.
+	type chatter Chatter
+	var raw struct {
+		chatter `yaml:",inline"`
+		Feed    string `yaml:"feed"`
+	}
+	// Defaults survive keys the file leaves out, which is what Load relies on.
+	raw.chatter = chatter(*c)
+
+	if err := value.Decode(&raw); err != nil {
+		return err
+	}
+	*c = Chatter(raw.chatter)
+	if raw.Feed != "" && len(c.Feeds) == 0 {
+		c.Feeds = []Feed{{URL: raw.Feed}}
+	}
+	if c.Feeds == nil {
+		c.Feeds = []Feed{}
+	}
+	return nil
 }
 
 // Message controls how long text stays up and how big it is drawn.
@@ -271,10 +320,14 @@ func Default() Config {
 			Roam:        RoamHorizontal,
 			Speed:       45,
 			Chatter: Chatter{
-				Enabled:          false,
-				IntervalSec:      600,
-				Source:           "",
-				Feed:             "",
+				Enabled:     false,
+				IntervalSec: 600,
+				Source:      "",
+				// Empty rather than nil: this is marshalled to the settings
+				// page as JSON, where nil would arrive as null and the page
+				// would have a list it cannot iterate.
+				Feeds:            []Feed{},
+				MaxAgeDays:       30,
 				FetchIntervalSec: 1800,
 			},
 		},
@@ -353,11 +406,25 @@ func (c Config) Validate() error {
 	if c.Behavior.Chatter.IntervalSec <= 0 {
 		return fmt.Errorf("behavior.chatter.interval_sec must be positive, got %v", c.Behavior.Chatter.IntervalSec)
 	}
+	if c.Behavior.Chatter.MaxAgeDays < 0 {
+		return fmt.Errorf("behavior.chatter.max_age_days must not be negative, got %v", c.Behavior.Chatter.MaxAgeDays)
+	}
 	if c.Behavior.Chatter.FetchIntervalSec <= 0 {
 		return fmt.Errorf("behavior.chatter.fetch_interval_sec must be positive, got %v", c.Behavior.Chatter.FetchIntervalSec)
 	}
-	if c.Behavior.Chatter.Feed != "" && !feed.Openable(c.Behavior.Chatter.Feed) {
-		return fmt.Errorf("behavior.chatter.feed must be an http or https URL, got %q", c.Behavior.Chatter.Feed)
+	if n := len(c.Behavior.Chatter.Feeds); n > MaxFeeds {
+		return fmt.Errorf("behavior.chatter.feeds has %d entries, at most %d are allowed", n, MaxFeeds)
+	}
+	for i, f := range c.Behavior.Chatter.Feeds {
+		if !feed.Openable(f.URL) {
+			return fmt.Errorf("behavior.chatter.feeds[%d].url must be an http or https URL, got %q", i, f.URL)
+		}
+		if len([]rune(f.Name)) > MaxFeedName {
+			return fmt.Errorf("behavior.chatter.feeds[%d].name is longer than %d characters", i, MaxFeedName)
+		}
+		if strings.ContainsAny(f.Name, "\n\r") {
+			return fmt.Errorf("behavior.chatter.feeds[%d].name must be a single line", i)
+		}
 	}
 	if c.Message.DurationSec <= 0 {
 		return fmt.Errorf("message.duration_sec must be positive, got %v", c.Message.DurationSec)

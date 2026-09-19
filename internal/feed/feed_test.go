@@ -2,10 +2,12 @@ package feed
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 // hackerNews is trimmed from the real feed, entities and all: the titles there
@@ -179,13 +181,10 @@ func TestParseRejectsRubbish(t *testing.T) {
 	}
 }
 
-func TestSayingsPutTheLinkOnItsOwnLine(t *testing.T) {
-	got := Sayings([]Item{{Title: "A headline", Link: "https://example.com/x"}})
-	if len(got) != 1 {
-		t.Fatalf("got %d sayings, want 1", len(got))
-	}
-	if got[0] != "A headline\nhttps://example.com/x" {
-		t.Errorf("saying = %q", got[0])
+func TestTextPutsTheLinkOnItsOwnLine(t *testing.T) {
+	got := Item{Title: "A headline", Link: "https://example.com/x"}.Text()
+	if got != "A headline\nhttps://example.com/x" {
+		t.Errorf("Text = %q", got)
 	}
 }
 
@@ -248,5 +247,210 @@ func TestFetchStopsReadingAnEndlessBody(t *testing.T) {
 	// 13MB of x.
 	if _, err := NewFetcher().Fetch(context.Background(), srv.URL); err == nil {
 		t.Error("Fetch succeeded on a body of rubbish, want an error")
+	}
+}
+
+func quietLog() *slog.Logger { return slog.New(slog.DiscardHandler) }
+
+// The requirement this pins: one broken feed must not cost the others. Point
+// gumpet at a good feed and a dead one, and the good one keeps arriving.
+func TestFetchAllKeepsGoingPastAFeedThatFails(t *testing.T) {
+	good := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(hackerNews))
+	}))
+	defer good.Close()
+	broken := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "nope", http.StatusInternalServerError)
+	}))
+	defer broken.Close()
+
+	groups := NewFetcher().FetchAll(context.Background(), []Source{
+		{Name: "broken", URL: broken.URL},
+		{Name: "good", URL: good.URL},
+		{Name: "unresolvable", URL: "https://no.such.host.invalid/rss"},
+		{Name: "refused", URL: "file:///etc/passwd"},
+	}, 0, quietLog())
+
+	if len(groups) != 1 {
+		t.Fatalf("got %d groups, want only the one that answered: %+v", len(groups), groups)
+	}
+	if groups[0].Name != "good" {
+		t.Errorf("group name = %q, want good", groups[0].Name)
+	}
+	if len(groups[0].Items) != 3 {
+		t.Errorf("got %d items, want the 3 from the working feed", len(groups[0].Items))
+	}
+}
+
+func TestFetchAllLabelsEachGroupWithItsSource(t *testing.T) {
+	one := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(hackerNews))
+	}))
+	defer one.Close()
+	two := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(atomFeed))
+	}))
+	defer two.Close()
+
+	groups := NewFetcher().FetchAll(context.Background(), []Source{
+		{Name: "HN", URL: one.URL},
+		{Name: "", URL: two.URL},
+	}, 0, quietLog())
+
+	if len(groups) != 2 {
+		t.Fatalf("got %d groups, want 2", len(groups))
+	}
+	if groups[0].Name != "HN" || len(groups[0].Items) != 3 {
+		t.Errorf("first group = %q with %d items", groups[0].Name, len(groups[0].Items))
+	}
+	// A feed with no name is allowed; the balloon just gets no heading.
+	if groups[1].Name != "" || len(groups[1].Items) != 2 {
+		t.Errorf("second group = %q with %d items", groups[1].Name, len(groups[1].Items))
+	}
+}
+
+func TestFetchAllOfNothingIsNothing(t *testing.T) {
+	if got := NewFetcher().FetchAll(context.Background(), nil, 0, quietLog()); len(got) != 0 {
+		t.Errorf("FetchAll(nil) = %+v, want nothing", got)
+	}
+}
+
+func TestParseReadsRSSDates(t *testing.T) {
+	const in = `<rss version="2.0"><channel>
+	<item><title>dated</title><link>https://example.com/a</link>
+	  <pubDate>Fri, 18 Sep 2026 13:06:30 +0000</pubDate></item>
+	<item><title>undated</title><link>https://example.com/b</link></item>
+	</channel></rss>`
+
+	items, err := Parse([]byte(in))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	want := time.Date(2026, 9, 18, 13, 6, 30, 0, time.UTC)
+	if !items[0].Published.Equal(want) {
+		t.Errorf("published = %v, want %v", items[0].Published, want)
+	}
+	if !items[1].Published.IsZero() {
+		t.Errorf("undated item got %v, want the zero time", items[1].Published)
+	}
+}
+
+func TestParseReadsAtomDates(t *testing.T) {
+	const in = `<feed xmlns="http://www.w3.org/2005/Atom">
+	  <entry><title>one</title><link href="https://example.com/1"/>
+	    <published>2026-09-18T13:06:30Z</published>
+	    <updated>2026-09-19T01:00:00Z</updated></entry>
+	  <entry><title>two</title><link href="https://example.com/2"/>
+	    <updated>2026-09-17T00:00:00Z</updated></entry>
+	</feed>`
+
+	items, err := Parse([]byte(in))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	// published wins: an old post edited yesterday is still an old post.
+	if got := items[0].Published; !got.Equal(time.Date(2026, 9, 18, 13, 6, 30, 0, time.UTC)) {
+		t.Errorf("first published = %v, want the published date not the updated one", got)
+	}
+	// updated is the fallback when there is no published.
+	if got := items[1].Published; !got.Equal(time.Date(2026, 9, 17, 0, 0, 0, 0, time.UTC)) {
+		t.Errorf("second published = %v, want the updated date", got)
+	}
+}
+
+// Feeds are written by hand as often as generated, so the date is spelt many
+// ways. An unreadable one must read as undated rather than as 1 January year 1,
+// which would be filtered out as ancient.
+func TestParseTimeHandlesTheSpellingsFeedsActuallyUse(t *testing.T) {
+	for _, in := range []string{
+		"Fri, 18 Sep 2026 13:06:30 +0000",
+		"Fri, 18 Sep 2026 13:06:30 GMT",
+		"Fri, 8 Sep 2026 13:06:30 +0900",
+		"2026-09-18T13:06:30Z",
+		"2026-09-18T13:06:30+09:00",
+		"2026-09-18 13:06:30",
+		"2026-09-18",
+	} {
+		if parseTime(in).IsZero() {
+			t.Errorf("parseTime(%q) failed, want a date", in)
+		}
+	}
+	for _, in := range []string{"", "   ", "yesterday", "not a date at all"} {
+		if !parseTime(in).IsZero() {
+			t.Errorf("parseTime(%q) = %v, want the zero time", in, parseTime(in))
+		}
+	}
+}
+
+func TestRecentDropsWhatIsTooOld(t *testing.T) {
+	now := time.Date(2026, 9, 19, 12, 0, 0, 0, time.UTC)
+	items := []Item{
+		{Title: "today", Published: now.Add(-2 * time.Hour)},
+		{Title: "last week", Published: now.AddDate(0, 0, -7)},
+		{Title: "two months ago", Published: now.AddDate(0, -2, 0)},
+		{Title: "years ago", Published: now.AddDate(-5, 0, 0)},
+		{Title: "undated"},
+	}
+
+	got := Recent(items, 30*24*time.Hour, now)
+	want := []string{"today", "last week", "undated"}
+	if len(got) != len(want) {
+		t.Fatalf("Recent kept %d items, want %d: %+v", len(got), len(want), got)
+	}
+	for i := range want {
+		if got[i].Title != want[i] {
+			t.Errorf("Recent[%d] = %q, want %q", i, got[i].Title, want[i])
+		}
+	}
+}
+
+// An undated item is not an old one. Dropping them would empty every feed that
+// does not bother with dates, which is a great many of them.
+func TestRecentKeepsUndatedItems(t *testing.T) {
+	now := time.Now()
+	items := []Item{{Title: "a"}, {Title: "b"}, {Title: "c"}}
+	if got := Recent(items, time.Hour, now); len(got) != 3 {
+		t.Errorf("Recent kept %d of 3 undated items, want all", len(got))
+	}
+}
+
+func TestRecentWithNoLimitKeepsEverything(t *testing.T) {
+	now := time.Now()
+	items := []Item{
+		{Title: "ancient", Published: now.AddDate(-20, 0, 0)},
+		{Title: "new", Published: now},
+	}
+	if got := Recent(items, 0, now); len(got) != 2 {
+		t.Errorf("Recent with no limit kept %d of 2, want both", len(got))
+	}
+}
+
+// The case that started this: a podcast archive where all but a few episodes
+// are years old should contribute its recent episodes and nothing else.
+func TestFetchAllDropsAFeedWithNothingRecent(t *testing.T) {
+	old := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`<rss version="2.0"><channel>
+		  <item><title>episode 1</title><link>https://example.com/1</link>
+		    <pubDate>Mon, 2 Jan 2012 15:04:05 +0000</pubDate></item>
+		  <item><title>episode 2</title><link>https://example.com/2</link>
+		    <pubDate>Tue, 3 Jan 2012 15:04:05 +0000</pubDate></item>
+		</channel></rss>`))
+	}))
+	defer old.Close()
+	fresh := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(hackerNews))
+	}))
+	defer fresh.Close()
+
+	groups := NewFetcher().FetchAll(context.Background(), []Source{
+		{Name: "archive", URL: old.URL},
+		{Name: "news", URL: fresh.URL},
+	}, 30*24*time.Hour, quietLog())
+
+	if len(groups) != 1 {
+		t.Fatalf("got %d groups, want only the one with recent items: %+v", len(groups), groups)
+	}
+	if groups[0].Name != "news" {
+		t.Errorf("group = %q, want news", groups[0].Name)
 	}
 }

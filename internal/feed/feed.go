@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"html"
 	"io"
+	"log/slog"
 	"net/http"
 	"regexp"
 	"strings"
@@ -40,6 +41,10 @@ const Timeout = 5 * time.Second
 type Item struct {
 	Title string
 	Link  string
+	// Published is when the feed says the item appeared, or the zero time if
+	// it did not say. Feeds are not obliged to date anything, and plenty do
+	// not.
+	Published time.Time
 }
 
 // rss is the subset of RSS 2.0 worth reading. Everything else in the document
@@ -49,6 +54,10 @@ type rss struct {
 	Items []struct {
 		Title string `xml:"title"`
 		Link  string `xml:"link"`
+		// RSS dates are RFC 822 with several spellings in the wild; see
+		// [parseTime].
+		PubDate string `xml:"pubDate"`
+		Date    string `xml:"date"`
 	} `xml:"channel>item"`
 }
 
@@ -60,6 +69,11 @@ type atom struct {
 			Rel  string `xml:"rel,attr"`
 			Type string `xml:"type,attr"`
 		} `xml:"link"`
+		// Published is when it first appeared and Updated when it last
+		// changed. Published is preferred, since an old post edited yesterday
+		// is still an old post.
+		Published string `xml:"published"`
+		Updated   string `xml:"updated"`
 	} `xml:"entry"`
 }
 
@@ -71,7 +85,7 @@ func Parse(data []byte) ([]Item, error) {
 	if err := xml.Unmarshal(data, &r); err == nil && len(r.Items) > 0 {
 		out := make([]Item, 0, len(r.Items))
 		for _, it := range r.Items {
-			if item, ok := clean(it.Title, it.Link); ok {
+			if item, ok := clean(it.Title, it.Link, firstOf(it.PubDate, it.Date)); ok {
 				out = append(out, item)
 			}
 		}
@@ -86,7 +100,7 @@ func Parse(data []byte) ([]Item, error) {
 	}
 	out := make([]Item, 0, len(a.Entries))
 	for _, e := range a.Entries {
-		if item, ok := clean(e.Title, atomLink(e.Links)); ok {
+		if item, ok := clean(e.Title, atomLink(e.Links), firstOf(e.Published, e.Updated)); ok {
 			out = append(out, item)
 		}
 	}
@@ -119,7 +133,7 @@ var tagPattern = regexp.MustCompile(`<[^>]*>`)
 
 // clean turns one feed entry into something safe to draw, and reports whether
 // anything usable was left.
-func clean(title, link string) (Item, bool) {
+func clean(title, link, published string) (Item, bool) {
 	// Some feeds put markup in the title, and gumpet draws text rather than
 	// HTML. Entities are resolved first and tags stripped second, so that a
 	// title spelling a tag as &amp;lt;script&amp;gt; cannot come out of this
@@ -135,7 +149,73 @@ func clean(title, link string) (Item, bool) {
 	if title == "" || !Openable(link) {
 		return Item{}, false
 	}
-	return Item{Title: title, Link: link}, true
+	return Item{Title: title, Link: link, Published: parseTime(published)}, true
+}
+
+func firstOf(values ...string) string {
+	for _, v := range values {
+		if strings.TrimSpace(v) != "" {
+			return v
+		}
+	}
+	return ""
+}
+
+// timeFormats are the spellings actually met in the wild. RSS says RFC 822 and
+// Atom says RFC 3339, but feeds are written by hand as often as not: the
+// single-digit days, the missing seconds and the named zones are all things
+// real feeds do.
+var timeFormats = []string{
+	time.RFC1123Z,
+	time.RFC1123,
+	time.RFC3339,
+	time.RFC822Z,
+	time.RFC822,
+	"Mon, 2 Jan 2006 15:04:05 -0700",
+	"Mon, 2 Jan 2006 15:04:05 MST",
+	"Mon, 2 Jan 2006 15:04 -0700",
+	"2 Jan 2006 15:04:05 -0700",
+	"2006-01-02T15:04:05-07:00",
+	"2006-01-02T15:04:05Z",
+	"2006-01-02 15:04:05",
+	"2006-01-02",
+}
+
+// parseTime reads a feed's date, returning the zero time when it cannot. An
+// unreadable date is treated the same as a missing one: undated, rather than
+// ancient.
+func parseTime(s string) time.Time {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return time.Time{}
+	}
+	for _, layout := range timeFormats {
+		if t, err := time.Parse(layout, s); err == nil {
+			return t
+		}
+	}
+	return time.Time{}
+}
+
+// Recent returns the items published within maxAge of now, which is how a
+// podcast's ten-year archive stops crowding out this morning's news.
+//
+// An item with no date is kept. A feed that does not say when something
+// happened is not evidence that it happened long ago, and dropping undated
+// items would silently empty every feed that omits them. maxAge of zero keeps
+// everything.
+func Recent(items []Item, maxAge time.Duration, now time.Time) []Item {
+	if maxAge <= 0 {
+		return items
+	}
+	cutoff := now.Add(-maxAge)
+	out := make([]Item, 0, len(items))
+	for _, it := range items {
+		if it.Published.IsZero() || it.Published.After(cutoff) {
+			out = append(out, it)
+		}
+	}
+	return out
 }
 
 // Openable reports whether a URL is one gumpet will put in front of anyone.
@@ -195,13 +275,55 @@ func (f *Fetcher) Fetch(ctx context.Context, url string) ([]Item, error) {
 	return Parse(body)
 }
 
-// Sayings renders items the way the pet says them: the headline, then the URL
-// on its own line. The URL is left as plain text because gumpet already spots
-// one and draws it as a link — there is nothing for this package to mark up.
-func Sayings(items []Item) []string {
-	out := make([]string, 0, len(items))
-	for _, it := range items {
-		out = append(out, it.Title+"\n"+it.Link)
+// Source is a feed to read, together with the name headlines from it are
+// labelled with.
+type Source struct {
+	Name string
+	URL  string
+}
+
+// Group is what one source had to say. It is kept separate from the others so
+// that a source publishing thirty things does not drown out one publishing
+// three.
+type Group struct {
+	Name  string
+	Items []Item
+}
+
+// FetchAll reads every source and returns a group for each that answered.
+//
+// The sources are read one after another rather than all at once: there are a
+// handful of them and a long wait between rounds, so there is nothing to gain
+// from a burst of connections and a good deal of manners in not making one.
+//
+// A source that fails costs one line in the log and nothing else. The others
+// are still read, and the failed one is tried again next time — one feed being
+// down must not take the rest with it.
+// maxAge drops items older than that; see [Recent]. A source left with nothing
+// recent produces no group at all, rather than an empty one.
+func (f *Fetcher) FetchAll(ctx context.Context, sources []Source, maxAge time.Duration, log *slog.Logger) []Group {
+	out := make([]Group, 0, len(sources))
+	for _, src := range sources {
+		items, err := f.Fetch(ctx, src.URL)
+		if err != nil {
+			log.Error("could not read a feed, skipping it this time",
+				"feed", src.URL, "name", src.Name, "error", err)
+			continue
+		}
+		recent := Recent(items, maxAge, time.Now())
+		if len(recent) == 0 {
+			log.Info("a feed had nothing recent enough to say",
+				"headlines", len(items), "name", src.Name, "feed", src.URL)
+			continue
+		}
+		out = append(out, Group{Name: src.Name, Items: recent})
+		log.Info("read a feed", "headlines", len(recent), "of", len(items),
+			"name", src.Name, "feed", src.URL)
 	}
 	return out
 }
+
+// Text renders one item the way the pet says it: the headline, then the URL on
+// its own line. The URL is left as plain text because gumpet already spots one
+// and draws it as a link — there is nothing for this package to mark up.
+func (i Item) Text() string { return i.Title + "\n" + i.Link }
