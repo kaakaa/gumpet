@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -25,7 +26,14 @@ func TestRenderRoundTrips(t *testing.T) {
 				Pet:    Pet{Source: "/tmp/cat.gif", Scale: 0.75, FPS: 12.5, FlipWhenFacingRight: false},
 				Behavior: Behavior{Mode: ModeOnMessage, IdleOpacity: 0.2, Roam: RoamWander, Speed: 0,
 					Chatter: Chatter{Enabled: true, IntervalSec: 90.5, Source: "/tmp/my sayings.txt",
-						Feed: "https://news.ycombinator.com/rss", FetchIntervalSec: 60}},
+						Feeds: []Feed{
+							{Name: "HN", URL: "https://news.ycombinator.com/rss"},
+							// A feed with no name at all: the balloon simply
+							// gets no heading, and this must survive a save.
+							{Name: "", URL: "https://go.dev/blog/feed.atom"},
+							{Name: "名前に空白と記号: ok", URL: "https://example.com/feed?a=b&c=d"},
+						},
+						MaxAgeDays: 7, FetchIntervalSec: 60}},
 				Message: Message{DurationSec: 12.25, MaxVisible: 1, MaxWidth: 300, MaxQueue: 3, TextScale: 1.5, OpenLinks: false},
 				Font:    Font{Path: "/tmp/My Font.ttc", System: false},
 				History: History{Max: 10, Hours: 0.5},
@@ -51,7 +59,7 @@ func TestRenderRoundTrips(t *testing.T) {
 			if err := yaml.Unmarshal([]byte(out), &got); err != nil {
 				t.Fatalf("parse rendered config: %v\n%s", err, out)
 			}
-			if got != tt.cfg {
+			if !reflect.DeepEqual(got, tt.cfg) {
 				t.Errorf("round trip changed the config:\n got %+v\nwant %+v\n\n%s", got, tt.cfg, out)
 			}
 		})
@@ -77,7 +85,7 @@ func TestLoadWritesDefaultWhenMissing(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if cfg != Default() {
+	if !reflect.DeepEqual(cfg, Default()) {
 		t.Errorf("Load returned %+v, want defaults", cfg)
 	}
 	if _, err := os.Stat(path); err != nil {
@@ -100,7 +108,7 @@ func TestSaveThenLoad(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if got != want {
+	if !reflect.DeepEqual(got, want) {
 		t.Errorf("Load = %+v, want %+v", got, want)
 	}
 }
@@ -176,8 +184,24 @@ func TestValidateRejectsBadValues(t *testing.T) {
 		{"zero chatter interval", func(c *Config) { c.Behavior.Chatter.IntervalSec = 0 }},
 		{"negative chatter interval", func(c *Config) { c.Behavior.Chatter.IntervalSec = -1 }},
 		{"zero fetch interval", func(c *Config) { c.Behavior.Chatter.FetchIntervalSec = 0 }},
-		{"feed that is not a URL", func(c *Config) { c.Behavior.Chatter.Feed = "news.ycombinator.com/rss" }},
-		{"feed reading a local file", func(c *Config) { c.Behavior.Chatter.Feed = "file:///etc/passwd" }},
+		{"negative max age", func(c *Config) { c.Behavior.Chatter.MaxAgeDays = -1 }},
+		{"feed that is not a URL", func(c *Config) {
+			c.Behavior.Chatter.Feeds = []Feed{{URL: "news.ycombinator.com/rss"}}
+		}},
+		{"feed reading a local file", func(c *Config) {
+			c.Behavior.Chatter.Feeds = []Feed{{URL: "file:///etc/passwd"}}
+		}},
+		{"too many feeds", func(c *Config) {
+			for i := 0; i <= MaxFeeds; i++ {
+				c.Behavior.Chatter.Feeds = append(c.Behavior.Chatter.Feeds, Feed{URL: "https://example.com/f"})
+			}
+		}},
+		{"feed name far too long", func(c *Config) {
+			c.Behavior.Chatter.Feeds = []Feed{{Name: strings.Repeat("あ", MaxFeedName+1), URL: "https://example.com/f"}}
+		}},
+		{"feed name spanning lines", func(c *Config) {
+			c.Behavior.Chatter.Feeds = []Feed{{Name: "one\ntwo", URL: "https://example.com/f"}}
+		}},
 		{"zero history", func(c *Config) { c.History.Max = 0 }},
 		{"negative retention", func(c *Config) { c.History.Hours = -1 }},
 	}
@@ -286,5 +310,76 @@ func TestFadedPetIsStillShown(t *testing.T) {
 	cfg.Behavior.Mode = ModeFaded
 	if !cfg.ShowsPet(false, false) {
 		t.Error("a faded pet is not drawn at all")
+	}
+}
+
+// A config written before feeds became a list still has to load, or an upgrade
+// silently turns the pet's feed off.
+func TestChatterAcceptsTheOldSingleFeed(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	const old = "behavior:\n  chatter:\n    enabled: true\n    feed: \"https://news.ycombinator.com/rss\"\n"
+	if err := os.WriteFile(path, []byte(old), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if len(cfg.Behavior.Chatter.Feeds) != 1 {
+		t.Fatalf("feeds = %+v, want the old single feed carried over", cfg.Behavior.Chatter.Feeds)
+	}
+	if got := cfg.Behavior.Chatter.Feeds[0].URL; got != "https://news.ycombinator.com/rss" {
+		t.Errorf("feeds[0].url = %q", got)
+	}
+	if !cfg.Behavior.Chatter.Enabled {
+		t.Error("the rest of the chatter block was lost")
+	}
+	// Keys the old file did not mention keep their defaults.
+	if cfg.Behavior.Chatter.FetchIntervalSec != Default().Behavior.Chatter.FetchIntervalSec {
+		t.Errorf("fetch_interval_sec = %v, want the default", cfg.Behavior.Chatter.FetchIntervalSec)
+	}
+}
+
+// The new list wins, so a file holding both is not ambiguous.
+func TestANewFeedListBeatsTheOldKey(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	const both = "behavior:\n  chatter:\n    feed: \"https://old.example.com/rss\"\n" +
+		"    feeds:\n      - name: New\n        url: \"https://new.example.com/rss\"\n"
+	if err := os.WriteFile(path, []byte(both), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if len(cfg.Behavior.Chatter.Feeds) != 1 || cfg.Behavior.Chatter.Feeds[0].Name != "New" {
+		t.Errorf("feeds = %+v, want only the new list", cfg.Behavior.Chatter.Feeds)
+	}
+}
+
+// An old config, once saved, should come back as a list rather than reverting.
+func TestTheOldFeedIsWrittenBackAsAList(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	const old = "behavior:\n  chatter:\n    feed: \"https://news.ycombinator.com/rss\"\n"
+	if err := os.WriteFile(path, []byte(old), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if err := Save(path, cfg); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	again, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load after Save: %v", err)
+	}
+	if !reflect.DeepEqual(again.Behavior.Chatter.Feeds, cfg.Behavior.Chatter.Feeds) {
+		t.Errorf("after a save the feeds became %+v, want %+v",
+			again.Behavior.Chatter.Feeds, cfg.Behavior.Chatter.Feeds)
 	}
 }
