@@ -57,6 +57,10 @@ type shown struct {
 	msg       message.Message
 	remaining time.Duration
 	balloon   *balloon
+	// typed is how many characters have appeared so far, kept as a float so a
+	// slow speed still advances on a frame that is worth less than one
+	// character.
+	typed float64
 	// idle marks a remark the pet made up itself. It is never recorded, never
 	// queued, and gives way the moment a real message arrives.
 	idle bool
@@ -401,8 +405,17 @@ func (g *Game) advanceMessages(dt time.Duration) {
 	// reading one of them is reading the pile, and having the others time out
 	// from under it would shuffle the stack while they read.
 	if !g.reading {
+		g.advanceTyping(dt)
+
 		kept := g.showing[:0]
 		for _, s := range g.showing {
+			// A message that is still being said has not started its time on
+			// screen yet. Counting it down while it types would give a long
+			// message less time to be read than a short one.
+			if s.stillTyping() {
+				kept = append(kept, s)
+				continue
+			}
 			if s.remaining -= dt; s.remaining > 0 {
 				kept = append(kept, s)
 			}
@@ -624,6 +637,35 @@ func (g *Game) dropIdleTalk() {
 		g.panelDirty = true
 	}
 	g.showing = kept
+}
+
+// advanceTyping lets each balloon say a few more characters.
+//
+// Every balloon types at the same rate but keeps its own count, so several
+// arriving together are said at once rather than in turn — which is what makes
+// a burst read as a crowd talking.
+func (g *Game) advanceTyping(dt time.Duration) {
+	speed := g.cfg.Message.TypeSpeed
+	for i := range g.showing {
+		if speed <= 0 {
+			g.showing[i].typed = math.Inf(1)
+			continue
+		}
+		g.showing[i].typed += speed * dt.Seconds()
+	}
+}
+
+// stillTyping reports whether there is more of this message to appear.
+func (s shown) stillTyping() bool {
+	return s.balloon != nil && int(s.typed) < s.balloon.runes
+}
+
+// revealAll finishes a message at once, for someone who has read it faster
+// than the pet can say it.
+func (g *Game) revealAll(i int) {
+	if i >= 0 && i < len(g.showing) {
+		g.showing[i].typed = math.Inf(1)
+	}
 }
 
 // dismiss takes one balloon off the screen early. Whatever is next in the

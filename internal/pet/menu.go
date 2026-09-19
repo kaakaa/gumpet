@@ -255,6 +255,14 @@ func (g *Game) handleInput(dt time.Duration) error {
 	// own click takes it down: without this, following a link would always be
 	// the same gesture as throwing the message away.
 	if onBalloon >= 0 {
+		// A message still being said is finished rather than dismissed. Half a
+		// sentence is not something anyone means to throw away, and waiting
+		// for the pet to catch up before you may act on it would make the
+		// effect an obstacle.
+		if g.showing[onBalloon].stillTyping() {
+			g.revealAll(onBalloon)
+			return nil
+		}
 		if url := g.linkAt(onBalloon, px, py); url != "" {
 			g.openLink(url)
 			return nil

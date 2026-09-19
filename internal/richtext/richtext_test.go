@@ -193,3 +193,111 @@ func equal(a, b []string) bool {
 	}
 	return true
 }
+
+func TestRunesCountsTheWholeBlock(t *testing.T) {
+	lines := Wrap(Parse("see https://example.com/x now"), m, 100)
+	if got, want := Runes(lines), len([]rune("see https://example.com/x now")); got != want {
+		t.Errorf("Runes = %d, want %d", got, want)
+	}
+}
+
+func TestRunesCountsEachLineOfAWrappedBlock(t *testing.T) {
+	lines := Wrap([]Span{{Text: "abc\ndef"}}, m, 100)
+	if got := Runes(lines); got != 6 {
+		t.Errorf("Runes = %d, want 6 — the newline is not a character on any line", got)
+	}
+}
+
+func TestRevealGivesBackTheFirstNCharacters(t *testing.T) {
+	lines := Wrap([]Span{{Text: "abcdefghij"}}, m, 100)
+	for n := 0; n <= 10; n++ {
+		got := Reveal(lines, n, m)
+		var b strings.Builder
+		for _, l := range got {
+			b.WriteString(l.Text())
+		}
+		if want := "abcdefghij"[:n]; b.String() != want {
+			t.Errorf("Reveal(%d) = %q, want %q", n, b.String(), want)
+		}
+	}
+}
+
+// The whole point: revealing must not move anything. A word that will end up
+// on the second line starts on the second line.
+func TestRevealKeepsEveryRunWhereItWillEndUp(t *testing.T) {
+	full := Wrap(Parse("see https://example.com/abc now please"), m, 15)
+	total := Runes(full)
+
+	for n := 1; n <= total; n++ {
+		got := Reveal(full, n, m)
+		if len(got) > len(full) {
+			t.Fatalf("Reveal(%d) produced %d lines, more than the %d it wraps to", n, len(got), len(full))
+		}
+		for i, l := range got {
+			for j, r := range l.Runs {
+				if r.X != full[i].Runs[j].X {
+					t.Errorf("Reveal(%d) line %d run %d moved to X=%v, want %v",
+						n, i, j, r.X, full[i].Runs[j].X)
+				}
+			}
+		}
+	}
+}
+
+// A link only half typed out still has to have its underline the width of the
+// characters actually on screen.
+func TestRevealRemeasuresTheRunItStopsInside(t *testing.T) {
+	lines := Wrap(Parse("go https://example.com now"), m, 100)
+	// Far enough in to be partway through the URL.
+	got := Reveal(lines, 10, m)
+
+	var last Run
+	for _, l := range got {
+		if len(l.Runs) > 0 {
+			last = l.Runs[len(l.Runs)-1]
+		}
+	}
+	if want := m.Advance(last.Text); last.Width != want {
+		t.Errorf("partial run %q has width %v, want %v", last.Text, last.Width, want)
+	}
+	if last.Width == 0 && last.Text != "" {
+		t.Error("partial run has no width at all")
+	}
+}
+
+func TestRevealKeepsTheStyleOfAPartialRun(t *testing.T) {
+	lines := Wrap(Parse("go https://example.com now"), m, 100)
+	got := Reveal(lines, 10, m)
+
+	var sawLink bool
+	for _, l := range got {
+		for _, r := range l.Runs {
+			if r.Style.IsLink() {
+				sawLink = true
+				if r.Style.Link != "https://example.com" {
+					t.Errorf("partial link points at %q", r.Style.Link)
+				}
+			}
+		}
+	}
+	if !sawLink {
+		t.Error("the half-revealed link lost its style")
+	}
+}
+
+func TestRevealOfEverythingIsEverything(t *testing.T) {
+	lines := Wrap(Parse("see https://example.com/x now"), m, 12)
+	for _, n := range []int{Runes(lines), Runes(lines) + 1, 9999} {
+		got := Reveal(lines, n, m)
+		if len(got) != len(lines) {
+			t.Errorf("Reveal(%d) gave %d lines, want all %d", n, len(got), len(lines))
+		}
+	}
+}
+
+func TestRevealOfNothingIsNothing(t *testing.T) {
+	lines := Wrap([]Span{{Text: "abc"}}, m, 100)
+	if got := Reveal(lines, 0, m); Runes(got) != 0 {
+		t.Errorf("Reveal(0) showed %d runes, want none", Runes(got))
+	}
+}

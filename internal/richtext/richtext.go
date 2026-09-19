@@ -139,6 +139,60 @@ func Wrap(spans []Span, m textwrap.Measurer, maxWidth float64) []Line {
 	return out
 }
 
+// Runes counts the characters in a block of lines, which is how far a
+// typewriter effect has to get before the whole thing is on screen.
+func Runes(lines []Line) int {
+	n := 0
+	for _, l := range lines {
+		for _, r := range l.Runs {
+			n += len([]rune(r.Text))
+		}
+	}
+	return n
+}
+
+// Reveal returns the first n runes of a block, laid out exactly where they
+// were. Lines and runs keep the offsets the wrapper gave them, so revealing
+// text a character at a time never re-wraps it: the words stay where they will
+// end up, and the balloon around them never has to change size.
+//
+// The run a reveal stops inside has to be measured again, since its width is
+// what the underline under a link is drawn from.
+func Reveal(lines []Line, n int, m textwrap.Measurer) []Line {
+	if n >= Runes(lines) {
+		return lines
+	}
+	out := make([]Line, 0, len(lines))
+	left := n
+	for _, l := range lines {
+		if left <= 0 {
+			break
+		}
+		cut := Line{Width: l.Width, Runs: make([]Run, 0, len(l.Runs))}
+		for _, r := range l.Runs {
+			if left <= 0 {
+				break
+			}
+			runes := []rune(r.Text)
+			if len(runes) <= left {
+				cut.Runs = append(cut.Runs, r)
+				left -= len(runes)
+				continue
+			}
+			text := string(runes[:left])
+			cut.Runs = append(cut.Runs, Run{
+				Text:  text,
+				Style: r.Style,
+				X:     r.X,
+				Width: m.Advance(text),
+			})
+			left = 0
+		}
+		out = append(out, cut)
+	}
+	return out
+}
+
 // BlockWidth is the width of the widest line.
 func BlockWidth(lines []Line) float64 {
 	widest := 0.0
