@@ -9,6 +9,7 @@ import (
 
 	"github.com/kaakaa/gumpet/internal/browser"
 	"github.com/kaakaa/gumpet/internal/config"
+	"github.com/kaakaa/gumpet/internal/drag"
 	"github.com/kaakaa/gumpet/internal/message"
 	"github.com/kaakaa/gumpet/internal/richtext"
 )
@@ -185,6 +186,10 @@ func (g *Game) handleInput(dt time.Duration) error {
 	if g.passthrough {
 		g.menu, g.hovered, g.reading = nil, false, false
 		g.cursor.Reset()
+		// A gesture in progress cannot be finished by a window that has
+		// stopped receiving the mouse, so it is abandoned rather than left to
+		// be completed by whatever the next press happens to be.
+		g.endDrag(false)
 		return nil
 	}
 
@@ -212,6 +217,14 @@ func (g *Game) handleInput(dt time.Duration) error {
 		dt,
 	)
 	g.reading = g.hovered && onBalloon >= 0
+
+	// The cursor in monitor pixels, which is what a drag has to work in: the
+	// window moves with the pet and again with the drag, so a point inside it
+	// is not a fixed place on the screen.
+	mx, my := float64(winX)+px, float64(winY)+py
+	if done, err := g.handleDrag(mx, my, onPet, onBalloon); done {
+		return err
+	}
 
 	if g.menu != nil {
 		if g.overWindow(px, py) {
@@ -252,11 +265,90 @@ func (g *Game) handleInput(dt time.Duration) error {
 		return nil
 	}
 
-	if onPet {
-		g.menu = g.buildMenu()
-		g.menuIdle = 0
-	}
+	// Pressing the pet starts a gesture rather than opening the menu. Which it
+	// was is only known at release: see [Game.handleDrag].
 	return nil
+}
+
+// handleDrag moves the stage while the pet is held, and reports whether it has
+// dealt with this tick's input.
+//
+// The pet's menu opens on release rather than on press, because until the
+// button comes up there is no telling whether this was a click or the start of
+// a drag. Balloons are left alone: they are dismissed on press as before, so
+// only the pet itself can be grabbed.
+func (g *Game) handleDrag(mx, my float64, onPet bool, onBalloon int) (done bool, err error) {
+	// A stage filling the monitor has nowhere to be dragged to.
+	draggable := !g.cfg.Stage.Fullscreen
+
+	if inpututil.IsMouseButtonJustReleased(ebiten.MouseButtonLeft) {
+		if wasDrag := g.drag.Release(); wasDrag {
+			g.saveDraggedStage()
+			return true, nil
+		}
+		if g.dragPressedPet {
+			g.dragPressedPet = false
+			// A press and release that went nowhere is a click after all.
+			g.menu = g.buildMenu()
+			g.menuIdle = 0
+			return true, nil
+		}
+		g.dragPressedPet = false
+	}
+
+	if g.drag.Dragging() || g.dragActive {
+		st := g.stage()
+		x, y, dragging := g.drag.Move(mx, my,
+			drag.Rect{X: st.X, Y: st.Y, W: st.W, H: st.H},
+			drag.Rect{W: g.monitor.W, H: g.monitor.H})
+		if dragging {
+			// Carry the pet with the stage. Reshaping alone would only move
+			// the walls it walks between, so the pet would sit still until an
+			// edge pushed it — the window would lag behind the cursor.
+			was := g.stage()
+			g.dragActive = true
+			g.dragX, g.dragY = x, y
+			g.walker.Translate(x-was.X, y-was.Y)
+			g.reshapeWalker()
+		}
+		return true, nil
+	}
+
+	if draggable && g.menu == nil && onBalloon < 0 && onPet &&
+		inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
+		st := g.stage()
+		g.drag.Press(mx, my, drag.Rect{X: st.X, Y: st.Y, W: st.W, H: st.H})
+		g.dragPressedPet = true
+		return true, nil
+	}
+	return false, nil
+}
+
+// saveDraggedStage writes where the pet was put down. It goes through the
+// shared store like every other settings change, so the settings page sees it
+// too rather than the two of them disagreeing about where the pet lives.
+func (g *Game) saveDraggedStage() {
+	x, y := int(math.Round(g.dragX)), int(math.Round(g.dragY))
+	g.endDrag(true)
+
+	if err := g.store.Update(func(c *config.Config) {
+		c.Stage.Anchor = config.AnchorCustom
+		c.Stage.X, c.Stage.Y = x, y
+	}); err != nil {
+		g.log.Error("could not save where the pet was dragged to", "error", err)
+	}
+}
+
+// endDrag clears the drag state. keep says the position has been saved and the
+// walker will be reshaped by the settings coming back; otherwise the stage
+// snaps back to what the settings say.
+func (g *Game) endDrag(keep bool) {
+	g.drag.Cancel()
+	g.dragPressedPet = false
+	g.dragActive = false
+	if !keep {
+		g.reshapeWalker()
+	}
 }
 
 // pick runs a row's action. Settings changes come back through the store, so

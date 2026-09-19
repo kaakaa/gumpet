@@ -385,3 +385,34 @@ func posOf(w *Walker) [2]float64 {
 	x, y := w.Pos()
 	return [2]float64{x, y}
 }
+
+// Translate is for the stage moving under the pet, which is what dragging it
+// does. The pet has to come along, or the window lags behind the cursor.
+func TestTranslateCarriesThePetAlong(t *testing.T) {
+	w := New(config.RoamWander, Rect{X: 0, Y: 0, W: 500, H: 500}, 50, 50, 40, rand.New(rand.NewPCG(1, 2)))
+	x0, y0 := w.Pos()
+
+	w.Translate(30, -20)
+
+	x, y := w.Pos()
+	if x != x0+30 || y != y0-20 {
+		t.Errorf("Pos = (%v, %v), want (%v, %v)", x, y, x0+30, y0-20)
+	}
+}
+
+// It must still respect the stage it is in, or a big move would put the pet
+// outside its own walls.
+func TestTranslateKeepsThePetInsideTheStage(t *testing.T) {
+	area := Rect{X: 0, Y: 0, W: 500, H: 500}
+	w := New(config.RoamWander, area, 50, 50, 40, rand.New(rand.NewPCG(1, 2)))
+
+	w.Translate(10000, 10000)
+
+	x, y := w.Pos()
+	if x < area.X || x > area.X+area.W-50 {
+		t.Errorf("x = %v, want it inside the stage", x)
+	}
+	if y < area.Y || y > area.Y+area.H-50 {
+		t.Errorf("y = %v, want it inside the stage", y)
+	}
+}

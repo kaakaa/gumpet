@@ -21,6 +21,7 @@ import (
 	"github.com/kaakaa/gumpet/internal/chatter"
 	"github.com/kaakaa/gumpet/internal/config"
 	"github.com/kaakaa/gumpet/internal/display"
+	"github.com/kaakaa/gumpet/internal/drag"
 	"github.com/kaakaa/gumpet/internal/feed"
 	"github.com/kaakaa/gumpet/internal/history"
 	"github.com/kaakaa/gumpet/internal/hover"
@@ -133,6 +134,14 @@ type Game struct {
 	// one of its balloons, can be clicked. [hover.Tracker] decides: a cursor
 	// merely lying where the pet wandered does not count.
 	hovered bool
+	// drag follows a press-to-release gesture on the pet. dragActive says the
+	// stage is currently being moved by one, and dragX/dragY are where it has
+	// got to — kept here rather than written to the settings on every tick, so
+	// that a drag is one saved change rather than hundreds.
+	drag           drag.Tracker
+	dragActive     bool
+	dragX, dragY   float64
+	dragPressedPet bool
 	// reading says the cursor is being held on a balloon, which stops the
 	// countdown: a message being read should not vanish mid-sentence, and a
 	// link cannot be clicked if it disappears while being aimed at.
@@ -292,7 +301,13 @@ func (g *Game) reshapeWalker() {
 }
 
 func (g *Game) stage() layout.Rect {
-	return layout.Stage(g.cfg.Stage, int(g.monitor.W), int(g.monitor.H))
+	r := layout.Stage(g.cfg.Stage, int(g.monitor.W), int(g.monitor.H))
+	if g.dragActive {
+		// Mid-drag the stage is wherever the cursor has taken it, which the
+		// settings do not know about until the button comes up.
+		r.X, r.Y = g.dragX, g.dragY
+	}
+	return r
 }
 
 // canRoam reports whether the pet should be walking. It carries on walking
