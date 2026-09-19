@@ -72,7 +72,12 @@ type balloon struct {
 	titleH float64
 	// lineH is the baseline-to-baseline distance the lines were laid out at,
 	// kept so that a click can be turned back into a line number.
-	lineH          float64
+	lineH float64
+	// runes is how many characters the message has, which is how far the
+	// typing has to get. The heading is not counted: it names where the
+	// message came from, and a source revealed a letter at a time would be
+	// useless until it finished.
+	runes          int
 	border, accent color.NRGBA
 }
 
@@ -90,6 +95,7 @@ func (g *Game) layoutBalloon(msg message.Message) *balloon {
 		textW: richtext.BlockWidth(lines),
 		textH: float64(len(lines)) * f.lineHeight(),
 	}
+	b.runes = richtext.Runes(lines)
 	b.border, b.accent = colorsFor(msg.Level)
 
 	if msg.Title != "" {
@@ -208,7 +214,14 @@ func (g *Game) drawBalloons(screen *ebiten.Image) {
 			g.drawRichText(screen, b.title, (x+balloonPadding)*ds, (y+balloonPadding)*ds,
 				g.fonts.message, b.accent)
 		}
-		g.drawRichText(screen, b.lines, (x+balloonPadding)*ds, (y+balloonPadding+b.titleH)*ds,
+		// The balloon was sized and wrapped for the whole message, so what is
+		// drawn here is only the part said so far. Nothing moves as the rest
+		// arrives.
+		lines := b.lines
+		if typed := int(g.showing[i].typed); typed < b.runes {
+			lines = richtext.Reveal(lines, typed, g.fonts.message)
+		}
+		g.drawRichText(screen, lines, (x+balloonPadding)*ds, (y+balloonPadding+b.titleH)*ds,
 			g.fonts.message, textColor)
 	}
 }

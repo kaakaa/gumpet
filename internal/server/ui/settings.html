@@ -415,6 +415,16 @@
         <p class="hint">How many messages may wait their turn before the oldest are dropped.</p>
       </div>
       <div class="row">
+        <label for="type-speed">Typing speed</label>
+        <input type="number" id="type-speed" data-path="message.type_speed" data-kind="float" min="0" step="5">
+        <p class="hint">
+          Characters a second, so a message reads as being said rather than
+          just appearing. 0 shows it all at once. The time a message stays up
+          is counted from when it has finished, so a long one is not given less
+          time to be read.
+        </p>
+      </div>
+      <div class="row">
         <label for="open-links">Open links when clicked</label>
         <input type="checkbox" id="open-links" data-path="message.open_links">
         <p class="hint">
