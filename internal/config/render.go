@@ -135,6 +135,11 @@ message:
   max_queue: {{ .Message.MaxQueue }}
   # Size of the message text relative to the font's own 12px.
   text_scale: {{ n .Message.TextScale }}
+  # How many characters a second appear when the pet says something, so that a
+  # message reads as being spoken rather than simply appearing. 0 shows the
+  # whole thing at once. The time a message stays up is counted from when it
+  # has finished appearing, so a long one is not given less time to read.
+  type_speed: {{ n .Message.TypeSpeed }}
   # Whether clicking a URL in a message opens it in your browser. URLs are
   # spotted automatically and always drawn as links; this decides whether the
   # click does anything. Only http and https are ever opened.
