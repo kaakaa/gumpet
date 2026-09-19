@@ -33,7 +33,7 @@ func TestRenderRoundTrips(t *testing.T) {
 							{Name: "", URL: "https://go.dev/blog/feed.atom"},
 							{Name: "名前に空白と記号: ok", URL: "https://example.com/feed?a=b&c=d"},
 						},
-						FetchIntervalSec: 60}},
+						MaxAgeDays: 7, FetchIntervalSec: 60}},
 				Message: Message{DurationSec: 12.25, MaxVisible: 1, MaxWidth: 300, MaxQueue: 3, TextScale: 1.5, OpenLinks: false},
 				Font:    Font{Path: "/tmp/My Font.ttc", System: false},
 				History: History{Max: 10, Hours: 0.5},
@@ -184,6 +184,7 @@ func TestValidateRejectsBadValues(t *testing.T) {
 		{"zero chatter interval", func(c *Config) { c.Behavior.Chatter.IntervalSec = 0 }},
 		{"negative chatter interval", func(c *Config) { c.Behavior.Chatter.IntervalSec = -1 }},
 		{"zero fetch interval", func(c *Config) { c.Behavior.Chatter.FetchIntervalSec = 0 }},
+		{"negative max age", func(c *Config) { c.Behavior.Chatter.MaxAgeDays = -1 }},
 		{"feed that is not a URL", func(c *Config) {
 			c.Behavior.Chatter.Feeds = []Feed{{URL: "news.ycombinator.com/rss"}}
 		}},

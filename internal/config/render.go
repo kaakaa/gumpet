@@ -115,6 +115,11 @@ behavior:
     {{- else }}
     feeds: []
     {{- end }}
+    # Ignore headlines older than this many days. A podcast's whole archive is
+    # a perfectly valid feed, and without this the pet mostly reads out
+    # episodes from years ago. 0 keeps everything. Items a feed did not date
+    # are always kept, since an undated item is not an old one.
+    max_age_days: {{ n .Behavior.Chatter.MaxAgeDays }}
     # How often to re-read the feeds, in seconds. There is no reason to fetch
     # once per remark, so this is much longer than interval_sec.
     fetch_interval_sec: {{ n .Behavior.Chatter.FetchIntervalSec }}

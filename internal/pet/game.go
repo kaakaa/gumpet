@@ -108,6 +108,10 @@ type Game struct {
 	// chatter is the pet talking to itself between messages, or nil when the
 	// setting is off.
 	chatter *chatter.Sayer
+	// localSayings is what the pet says when the feeds have nothing for it:
+	// the file or the bundled list, kept so that falling back does not mean
+	// reading it off disk again.
+	localSayings []chatter.Remark
 	// chatterSrc is what the current Sayer was built from, so it is only
 	// rebuilt when the settings behind it actually change. It holds a slice
 	// now, so it is compared field by field rather than with ==.
@@ -472,6 +476,7 @@ func (g *Game) ensureChatter() {
 	}
 
 	sayings, from := g.sayings(want.Source)
+	g.localSayings = sayings
 	g.chatterSrc = want
 	g.chatter = chatter.New(
 		sayings,
@@ -502,6 +507,14 @@ func (g *Game) advanceFeed(dt time.Duration) {
 	case groups := <-g.headlines:
 		g.fetching = false
 		if g.chatter != nil {
+			if len(groups) == 0 {
+				// Every feed was unreachable, or had nothing recent enough.
+				// Go back to the sayings rather than keeping headlines that
+				// are no longer in any feed — silence, or stale news, would
+				// both be worse than a proverb.
+				g.log.Info("no feed had anything to say, falling back to the sayings")
+				groups = [][]chatter.Remark{g.localSayings}
+			}
 			g.chatter.SetGroups(groups)
 		}
 	default:
@@ -518,23 +531,24 @@ func (g *Game) advanceFeed(dt time.Duration) {
 
 	// Copied, because the settings can change while the fetch is in flight.
 	feeds := append([]config.Feed(nil), cfg.Feeds...)
+	maxAge := time.Duration(cfg.MaxAgeDays * float64(24*time.Hour))
 	log := g.log
 	out := g.headlines
 	go func() {
-		out <- fetchAll(feeds, log)
+		out <- fetchAll(feeds, maxAge, log)
 	}()
 }
 
 // fetchAll reads the configured feeds and turns each one's headlines into a
 // group of remarks labelled with that feed's name.
-func fetchAll(feeds []config.Feed, log *slog.Logger) [][]chatter.Remark {
+func fetchAll(feeds []config.Feed, maxAge time.Duration, log *slog.Logger) [][]chatter.Remark {
 	sources := make([]feed.Source, len(feeds))
 	for i, f := range feeds {
 		sources[i] = feed.Source{Name: f.Name, URL: f.URL}
 	}
 
 	var groups [][]chatter.Remark
-	for _, g := range feed.NewFetcher().FetchAll(context.Background(), sources, log) {
+	for _, g := range feed.NewFetcher().FetchAll(context.Background(), sources, maxAge, log) {
 		remarks := make([]chatter.Remark, 0, len(g.Items))
 		for _, it := range g.Items {
 			remarks = append(remarks, chatter.Remark{Text: it.Text(), Title: g.Name})
@@ -549,7 +563,7 @@ func fetchAll(feeds []config.Feed, log *slog.Logger) [][]chatter.Remark {
 func sameChatter(a, b config.Chatter) bool {
 	if a.Enabled != b.Enabled || a.IntervalSec != b.IntervalSec ||
 		a.Source != b.Source || a.FetchIntervalSec != b.FetchIntervalSec ||
-		len(a.Feeds) != len(b.Feeds) {
+		a.MaxAgeDays != b.MaxAgeDays || len(a.Feeds) != len(b.Feeds) {
 		return false
 	}
 	for i := range a.Feeds {

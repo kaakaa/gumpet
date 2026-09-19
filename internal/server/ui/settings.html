@@ -369,7 +369,16 @@
         </p>
       </div>
       <div class="row">
-        <label for="chatter-fetch">Re-read the feed</label>
+        <label for="chatter-age">Ignore older than</label>
+        <input type="number" id="chatter-age" data-path="behavior.chatter.max_age_days" data-kind="float" min="0" step="1">
+        <p class="hint">
+          Days. A podcast's whole archive is a perfectly good feed, and without
+          this the pet mostly reads out episodes from years ago. 0 keeps
+          everything. Items a feed did not date are always kept.
+        </p>
+      </div>
+      <div class="row">
+        <label for="chatter-fetch">Re-read the feeds</label>
         <input type="number" id="chatter-fetch" data-path="behavior.chatter.fetch_interval_sec" data-kind="float" min="1" step="60">
         <p class="hint">Seconds between fetches. No reason to fetch once per remark.</p>
       </div>

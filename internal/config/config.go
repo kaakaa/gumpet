@@ -194,6 +194,10 @@ type Chatter struct {
 	// of the sayings above. Empty, which is the default, means gumpet makes no
 	// outgoing connections at all.
 	Feeds []Feed `yaml:"feeds" json:"feeds"`
+	// MaxAgeDays drops headlines older than this, so that a podcast archive of
+	// five hundred episodes does not bury this morning's news. Zero keeps
+	// everything. Items a feed did not date are always kept.
+	MaxAgeDays float64 `yaml:"max_age_days" json:"max_age_days"`
 	// FetchIntervalSec is how often the feeds are re-read. It is separate from
 	// IntervalSec because there is no reason to fetch once per remark, and it
 	// is shared by all of them because nobody has wanted otherwise.
@@ -323,6 +327,7 @@ func Default() Config {
 				// page as JSON, where nil would arrive as null and the page
 				// would have a list it cannot iterate.
 				Feeds:            []Feed{},
+				MaxAgeDays:       30,
 				FetchIntervalSec: 1800,
 			},
 		},
@@ -400,6 +405,9 @@ func (c Config) Validate() error {
 	}
 	if c.Behavior.Chatter.IntervalSec <= 0 {
 		return fmt.Errorf("behavior.chatter.interval_sec must be positive, got %v", c.Behavior.Chatter.IntervalSec)
+	}
+	if c.Behavior.Chatter.MaxAgeDays < 0 {
+		return fmt.Errorf("behavior.chatter.max_age_days must not be negative, got %v", c.Behavior.Chatter.MaxAgeDays)
 	}
 	if c.Behavior.Chatter.FetchIntervalSec <= 0 {
 		return fmt.Errorf("behavior.chatter.fetch_interval_sec must be positive, got %v", c.Behavior.Chatter.FetchIntervalSec)
