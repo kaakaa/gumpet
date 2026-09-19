@@ -2,6 +2,7 @@ package settings
 
 import (
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	"github.com/kaakaa/gumpet/internal/config"
@@ -28,7 +29,7 @@ func TestSaveUpdatesGetAndTheFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reload: %v", err)
 	}
-	if reloaded != cfg {
+	if !reflect.DeepEqual(reloaded, cfg) {
 		t.Errorf("file holds %+v, want %+v", reloaded, cfg)
 	}
 }

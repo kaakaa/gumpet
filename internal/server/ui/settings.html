@@ -100,7 +100,13 @@
   }
   @media (max-width: 540px) { .hint { grid-column: 1; } }
 
-  input[type=text], input[type=number], select {
+  textarea {
+    resize: vertical;
+    min-height: 60px;
+    line-height: 1.5;
+  }
+
+  input[type=text], input[type=number], select, textarea {
     width: 100%;
     max-width: 340px;
     padding: 7px 9px;
@@ -349,11 +355,13 @@
         </p>
       </div>
       <div class="row">
-        <label for="chatter-feed">Or a feed</label>
-        <input type="text" id="chatter-feed" data-path="behavior.chatter.feed" placeholder="https://news.ycombinator.com/rss">
+        <label for="chatter-feeds">Or feeds</label>
+        <textarea id="chatter-feeds" data-path="behavior.chatter.feeds" data-kind="feeds" rows="4"
+                  spellcheck="false" placeholder="HN https://news.ycombinator.com/rss"></textarea>
         <p class="hint">
-          An RSS or Atom URL. The pet reads out headlines instead of the
-          sayings above, and the link under each one is clickable.
+          One feed per line, as <code>name URL</code> &mdash; the URL is the
+          last thing on the line, and whatever comes before it is the name that
+          appears above the headline. A line with just a URL gets no name.
           <strong>This is the only part of gumpet that connects out to
           anywhere.</strong> Empty means it makes no outgoing requests at all.
           Only http and https, and only the headlines &mdash; never the
@@ -579,10 +587,41 @@
     }
   }
 
+  // feedLines renders the stored list as one feed per line. The URL goes last
+  // because a name may contain spaces and a URL may not, which makes the last
+  // field the only one that can be picked out without a separator to argue
+  // about.
+  function feedLines(feeds) {
+    return (feeds || []).map(function (f) {
+      return f.name ? f.name + " " + f.url : f.url;
+    }).join("\n");
+  }
+
+  // parseFeeds reads that back. Anything it cannot make sense of is sent to
+  // the server as written, so the config's own validation is what rejects it
+  // and the page does not have to hold a second opinion about what a URL is.
+  function parseFeeds(text) {
+    return text.split("\n").map(function (line) {
+      return line.trim();
+    }).filter(function (line) {
+      return line !== "";
+    }).map(function (line) {
+      var at = line.lastIndexOf(" ");
+      if (at < 0) { return { name: "", url: line }; }
+      return { name: line.slice(0, at).trim(), url: line.slice(at + 1).trim() };
+    });
+  }
+
   function fill(cfg) {
     fields.forEach(function (el) {
       var value = get(cfg, el.dataset.path);
-      if (el.type === "checkbox") { el.checked = !!value; } else { el.value = value; }
+      if (el.dataset.kind === "feeds") {
+        el.value = feedLines(value);
+      } else if (el.type === "checkbox") {
+        el.checked = !!value;
+      } else {
+        el.value = value;
+      }
     });
     syncEnabled();
   }
@@ -593,7 +632,9 @@
     var cfg = JSON.parse(JSON.stringify(loaded));
     fields.forEach(function (el) {
       var value;
-      if (el.type === "checkbox") {
+      if (el.dataset.kind === "feeds") {
+        value = parseFeeds(el.value);
+      } else if (el.type === "checkbox") {
         value = el.checked;
       } else if (el.dataset.kind === "int") {
         value = parseInt(el.value, 10);
@@ -640,7 +681,12 @@
     Object.keys(now).forEach(function (key) {
       var before = was ? was[key] : undefined;
       var after = now[key];
-      if (after !== null && typeof after === "object") {
+      // A list is sent whole or not at all. Recursing into one would send
+      // {"0": …} instead of an array, and would never notice a row that was
+      // deleted, since only the keys still present are walked.
+      if (Array.isArray(after)) {
+        if (JSON.stringify(before) !== JSON.stringify(after)) { out[key] = after; }
+      } else if (after !== null && typeof after === "object") {
         var nested = diff(before, after);
         if (Object.keys(nested).length > 0) { out[key] = nested; }
       } else if (before !== after) {

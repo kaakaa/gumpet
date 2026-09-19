@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"html"
 	"io"
+	"log/slog"
 	"net/http"
 	"regexp"
 	"strings"
@@ -195,13 +196,46 @@ func (f *Fetcher) Fetch(ctx context.Context, url string) ([]Item, error) {
 	return Parse(body)
 }
 
-// Sayings renders items the way the pet says them: the headline, then the URL
-// on its own line. The URL is left as plain text because gumpet already spots
-// one and draws it as a link — there is nothing for this package to mark up.
-func Sayings(items []Item) []string {
-	out := make([]string, 0, len(items))
-	for _, it := range items {
-		out = append(out, it.Title+"\n"+it.Link)
+// Source is a feed to read, together with the name headlines from it are
+// labelled with.
+type Source struct {
+	Name string
+	URL  string
+}
+
+// Group is what one source had to say. It is kept separate from the others so
+// that a source publishing thirty things does not drown out one publishing
+// three.
+type Group struct {
+	Name  string
+	Items []Item
+}
+
+// FetchAll reads every source and returns a group for each that answered.
+//
+// The sources are read one after another rather than all at once: there are a
+// handful of them and a long wait between rounds, so there is nothing to gain
+// from a burst of connections and a good deal of manners in not making one.
+//
+// A source that fails costs one line in the log and nothing else. The others
+// are still read, and the failed one is tried again next time — one feed being
+// down must not take the rest with it.
+func (f *Fetcher) FetchAll(ctx context.Context, sources []Source, log *slog.Logger) []Group {
+	out := make([]Group, 0, len(sources))
+	for _, src := range sources {
+		items, err := f.Fetch(ctx, src.URL)
+		if err != nil {
+			log.Error("could not read a feed, skipping it this time",
+				"feed", src.URL, "name", src.Name, "error", err)
+			continue
+		}
+		out = append(out, Group{Name: src.Name, Items: items})
+		log.Info("read a feed", "headlines", len(items), "name", src.Name, "feed", src.URL)
 	}
 	return out
 }
+
+// Text renders one item the way the pet says it: the headline, then the URL on
+// its own line. The URL is left as plain text because gumpet already spots one
+// and draws it as a link — there is nothing for this package to mark up.
+func (i Item) Text() string { return i.Title + "\n" + i.Link }

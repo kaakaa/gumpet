@@ -2,6 +2,7 @@ package feed
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -179,13 +180,10 @@ func TestParseRejectsRubbish(t *testing.T) {
 	}
 }
 
-func TestSayingsPutTheLinkOnItsOwnLine(t *testing.T) {
-	got := Sayings([]Item{{Title: "A headline", Link: "https://example.com/x"}})
-	if len(got) != 1 {
-		t.Fatalf("got %d sayings, want 1", len(got))
-	}
-	if got[0] != "A headline\nhttps://example.com/x" {
-		t.Errorf("saying = %q", got[0])
+func TestTextPutsTheLinkOnItsOwnLine(t *testing.T) {
+	got := Item{Title: "A headline", Link: "https://example.com/x"}.Text()
+	if got != "A headline\nhttps://example.com/x" {
+		t.Errorf("Text = %q", got)
 	}
 }
 
@@ -248,5 +246,70 @@ func TestFetchStopsReadingAnEndlessBody(t *testing.T) {
 	// 13MB of x.
 	if _, err := NewFetcher().Fetch(context.Background(), srv.URL); err == nil {
 		t.Error("Fetch succeeded on a body of rubbish, want an error")
+	}
+}
+
+func quietLog() *slog.Logger { return slog.New(slog.DiscardHandler) }
+
+// The requirement this pins: one broken feed must not cost the others. Point
+// gumpet at a good feed and a dead one, and the good one keeps arriving.
+func TestFetchAllKeepsGoingPastAFeedThatFails(t *testing.T) {
+	good := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(hackerNews))
+	}))
+	defer good.Close()
+	broken := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "nope", http.StatusInternalServerError)
+	}))
+	defer broken.Close()
+
+	groups := NewFetcher().FetchAll(context.Background(), []Source{
+		{Name: "broken", URL: broken.URL},
+		{Name: "good", URL: good.URL},
+		{Name: "unresolvable", URL: "https://no.such.host.invalid/rss"},
+		{Name: "refused", URL: "file:///etc/passwd"},
+	}, quietLog())
+
+	if len(groups) != 1 {
+		t.Fatalf("got %d groups, want only the one that answered: %+v", len(groups), groups)
+	}
+	if groups[0].Name != "good" {
+		t.Errorf("group name = %q, want good", groups[0].Name)
+	}
+	if len(groups[0].Items) != 3 {
+		t.Errorf("got %d items, want the 3 from the working feed", len(groups[0].Items))
+	}
+}
+
+func TestFetchAllLabelsEachGroupWithItsSource(t *testing.T) {
+	one := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(hackerNews))
+	}))
+	defer one.Close()
+	two := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(atomFeed))
+	}))
+	defer two.Close()
+
+	groups := NewFetcher().FetchAll(context.Background(), []Source{
+		{Name: "HN", URL: one.URL},
+		{Name: "", URL: two.URL},
+	}, quietLog())
+
+	if len(groups) != 2 {
+		t.Fatalf("got %d groups, want 2", len(groups))
+	}
+	if groups[0].Name != "HN" || len(groups[0].Items) != 3 {
+		t.Errorf("first group = %q with %d items", groups[0].Name, len(groups[0].Items))
+	}
+	// A feed with no name is allowed; the balloon just gets no heading.
+	if groups[1].Name != "" || len(groups[1].Items) != 2 {
+		t.Errorf("second group = %q with %d items", groups[1].Name, len(groups[1].Items))
+	}
+}
+
+func TestFetchAllOfNothingIsNothing(t *testing.T) {
+	if got := NewFetcher().FetchAll(context.Background(), nil, quietLog()); len(got) != 0 {
+		t.Errorf("FetchAll(nil) = %+v, want nothing", got)
 	}
 }

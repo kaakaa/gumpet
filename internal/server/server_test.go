@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -195,7 +196,7 @@ func TestGetConfigReturnsCurrentSettings(t *testing.T) {
 	if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	if body.Config != cfg {
+	if !reflect.DeepEqual(body.Config, cfg) {
 		t.Errorf("config = %+v, want %+v", body.Config, cfg)
 	}
 	if body.Path == "" {
@@ -730,4 +731,72 @@ func addrConfig(t *testing.T, addr string) config.Config {
 	cfg := config.Default()
 	cfg.Server.Addr = addr
 	return cfg
+}
+
+func TestFeedsCanBeSavedAsAList(t *testing.T) {
+	s, _, updates := newTestServerWithConfig(t, config.Default(), 1)
+
+	rec := do(t, s, http.MethodPut, "/api/v1/config", "application/json",
+		`{"behavior":{"chatter":{"feeds":[`+
+			`{"name":"HN","url":"https://news.ycombinator.com/rss"},`+
+			`{"name":"","url":"https://go.dev/blog/feed.atom"}]}}}`, nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d, want 200: %s", rec.Code, rec.Body)
+	}
+
+	got := (<-updates).Behavior.Chatter.Feeds
+	if len(got) != 2 {
+		t.Fatalf("feeds = %+v, want 2", got)
+	}
+	if got[0].Name != "HN" || got[0].URL != "https://news.ycombinator.com/rss" {
+		t.Errorf("feeds[0] = %+v", got[0])
+	}
+	if got[1].Name != "" || got[1].URL != "https://go.dev/blog/feed.atom" {
+		t.Errorf("feeds[1] = %+v", got[1])
+	}
+}
+
+// The page sends a list whole, so emptying it has to mean "no feeds" rather
+// than "leave them alone" — otherwise a feed can be added but never removed.
+func TestAnEmptyFeedListTurnsFeedsOff(t *testing.T) {
+	cfg := config.Default()
+	cfg.Behavior.Chatter.Feeds = []config.Feed{{Name: "HN", URL: "https://news.ycombinator.com/rss"}}
+	s, _, updates := newTestServerWithConfig(t, cfg, 1)
+
+	rec := do(t, s, http.MethodPut, "/api/v1/config", "application/json",
+		`{"behavior":{"chatter":{"feeds":[]}}}`, nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d, want 200: %s", rec.Code, rec.Body)
+	}
+	if got := (<-updates).Behavior.Chatter.Feeds; len(got) != 0 {
+		t.Errorf("feeds = %+v, want none left", got)
+	}
+}
+
+func TestAFeedURLThatIsNotHTTPIsRejected(t *testing.T) {
+	s, _, _ := newTestServerWithConfig(t, config.Default(), 1)
+
+	for _, body := range []string{
+		`{"behavior":{"chatter":{"feeds":[{"url":"file:///etc/passwd"}]}}}`,
+		`{"behavior":{"chatter":{"feeds":[{"url":"news.ycombinator.com/rss"}]}}}`,
+		`{"behavior":{"chatter":{"feeds":[{"name":"one\ntwo","url":"https://example.com/f"}]}}}`,
+	} {
+		rec := do(t, s, http.MethodPut, "/api/v1/config", "application/json", body, nil)
+		if rec.Code != http.StatusBadRequest {
+			t.Errorf("status %d for %s, want 400", rec.Code, body)
+		}
+	}
+}
+
+// The page iterates this list, so it must never arrive as null.
+func TestConfigCarriesAnEmptyFeedListRatherThanNull(t *testing.T) {
+	s, _, _ := newTestServerWithConfig(t, config.Default(), 1)
+
+	rec := do(t, s, http.MethodGet, "/api/v1/config", "", "", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d, want 200", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), `"feeds":[]`) {
+		t.Errorf("response does not carry an empty feeds list: %s", rec.Body)
+	}
 }
