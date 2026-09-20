@@ -1,0 +1,12 @@
+pet.gif is built from the character tiles of Kenney's "Pixel Platformer"
+(Tiles/Characters/tile_0024.png, tile_0025.png and tile_0026.png), by Kenney — www.kenney.nl —
+released under CC0 1.0 Universal (public domain dedication):
+https://creativecommons.org/publicdomain/zero/1.0/
+
+The pack's own License.txt says: "You can use this content for personal,
+educational, and commercial purposes. Support by crediting 'Kenney' or
+'www.kenney.nl' (this is not a requirement)." Credited here because it costs
+nothing and the work is worth naming.
+
+The tiles have been enlarged four times with nearest-neighbour sampling so the
+pixels stay square, and assembled into an animation. Nothing else was changed.

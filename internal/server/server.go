@@ -174,10 +174,18 @@ func (s *Server) handleGetConfig(w http.ResponseWriter, r *http.Request) {
 	if monitors == nil {
 		monitors = []display.Monitor{}
 	}
+	// The bundled pets come from the same list the loader and the pet's own
+	// menu use, so the page cannot drift out of step with what exists.
+	pets := make([]map[string]string, 0, len(petsrc.Builtins))
+	for _, p := range petsrc.Builtins {
+		pets = append(pets, map[string]string{"name": p.Name, "label": p.Label})
+	}
+
 	writeJSON(w, http.StatusOK, map[string]any{
 		"config":   s.config(),
 		"path":     s.store.Path(),
 		"monitors": monitors,
+		"pets":     pets,
 		// Anything the running process cannot change on the fly.
 		"restart_required": []string{"server.addr", "window.skip_taskbar"},
 	})

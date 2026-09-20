@@ -203,3 +203,145 @@ func TestValidateAcceptsTheBuiltin(t *testing.T) {
 		t.Errorf("Validate(\"\") = %v, want nil", err)
 	}
 }
+
+// Every bundled pet has to actually load, or a name in the menu is a name that
+// breaks the pet when picked.
+func TestEveryBundledPetLoads(t *testing.T) {
+	for _, pet := range Builtins {
+		src, err := Load(pet.Name)
+		if err != nil {
+			t.Errorf("Load(%q): %v", pet.Name, err)
+			continue
+		}
+		if len(src.Walk) == 0 {
+			t.Errorf("%s has no frames", pet.Name)
+		}
+		if src.Size.X == 0 || src.Size.Y == 0 {
+			t.Errorf("%s has no size", pet.Name)
+		}
+		if src.Scale <= 0 {
+			t.Errorf("%s has scale %v, which would make it invisible", pet.Name, src.Scale)
+		}
+	}
+}
+
+// A Source with a zero scale draws nothing, so no path through Load may leave
+// it unset.
+func TestEverySourceHasAUsableScale(t *testing.T) {
+	dir := t.TempDir()
+	writePNG(t, filepath.Join(dir, "01.png"), 10, 10)
+	single := filepath.Join(t.TempDir(), "one.png")
+	writePNG(t, single, 10, 10)
+
+	for _, source := range []string{"", "gopher", "pixel", dir, single} {
+		src, err := Load(source)
+		if err != nil {
+			t.Fatalf("Load(%q): %v", source, err)
+		}
+		if src.Scale <= 0 {
+			t.Errorf("Load(%q) gave scale %v, want a positive one", source, src.Scale)
+		}
+	}
+}
+
+func TestPixelArtAsksNotToBeSmoothed(t *testing.T) {
+	src, err := Load("pixel")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if src.Smooth {
+		t.Error("the pixel pet asks to be smoothed, which would blur it")
+	}
+
+	// Everything else does want smoothing, since it is enlarged from artwork
+	// that was never a grid of squares.
+	for _, name := range []string{"gopher"} {
+		s, err := Load(name)
+		if err != nil {
+			t.Fatalf("Load(%q): %v", name, err)
+		}
+		if !s.Smooth {
+			t.Errorf("%s asks not to be smoothed", name)
+		}
+	}
+}
+
+// A name beats a path, but only for the exact spellings in Builtins.
+func TestABuiltinNameIsNotMistakenForAPath(t *testing.T) {
+	if _, ok := BuiltinNamed("rose"); !ok {
+		t.Error("rose is not a built-in")
+	}
+	for _, notBuiltin := range []string{"./rose", "rose.gif", "ROSE", "", "gopher/out01.png"} {
+		if _, ok := BuiltinNamed(notBuiltin); ok {
+			t.Errorf("BuiltinNamed(%q) matched, want it treated as a path", notBuiltin)
+		}
+	}
+}
+
+// The pixel sprite is the reason Scale exists: without it, twelve pixels of
+// gopher is a speck.
+func TestTheBundledPetsAreComparableSizes(t *testing.T) {
+	for _, pet := range Builtins {
+		src, err := Load(pet.Name)
+		if err != nil {
+			t.Fatalf("Load(%q): %v", pet.Name, err)
+		}
+		drawn := float64(src.Size.Y) * src.Scale
+		if drawn < 60 || drawn > 400 {
+			t.Errorf("%s draws at %v pixels tall, want something in the range the others are",
+				pet.Name, drawn)
+		}
+	}
+}
+
+// Every bundled pet moves. A still pet is a picture stuck to the desktop, and
+// the whole point of shipping a choice is that each one is alive.
+func TestEveryBundledPetIsAnimated(t *testing.T) {
+	for _, pet := range Builtins {
+		src, err := Load(pet.Name)
+		if err != nil {
+			t.Errorf("Load(%q): %v", pet.Name, err)
+			continue
+		}
+		if len(src.Walk) < 2 {
+			t.Errorf("%s has %d frame(s), so it never moves", pet.Name, len(src.Walk))
+		}
+	}
+}
+
+// Frames that are all the same image animate in name only.
+func TestABundledPetsFramesDiffer(t *testing.T) {
+	for _, pet := range Builtins {
+		src, err := Load(pet.Name)
+		if err != nil || len(src.Walk) < 2 {
+			continue
+		}
+		first := src.Walk[0].Image
+		same := true
+		for _, f := range src.Walk[1:] {
+			if !identical(first, f.Image) {
+				same = false
+				break
+			}
+		}
+		if same {
+			t.Errorf("%s: every frame is the same picture", pet.Name)
+		}
+	}
+}
+
+func identical(a, b image.Image) bool {
+	if a.Bounds() != b.Bounds() {
+		return false
+	}
+	for y := a.Bounds().Min.Y; y < a.Bounds().Max.Y; y++ {
+		for x := a.Bounds().Min.X; x < a.Bounds().Max.X; x++ {
+			ar, ag, ab, aa := a.At(x, y).RGBA()
+			br, bg, bb, ba := b.At(x, y).RGBA()
+			if ar != br || ag != bg || ab != bb || aa != ba {
+				return false
+			}
+		}
+	}
+	return true
+}
