@@ -272,6 +272,9 @@ func (s *Server) handleMessage(w http.ResponseWriter, r *http.Request) {
 	// round to showing still appears on the messages page as pending.
 	rec := s.history.Add(msg)
 	msg.ID = rec.ID
+	// The balloon shows the same moment the messages page does, which means
+	// taking it from the record rather than reading the clock a second time.
+	msg.At = rec.QueuedAt
 
 	select {
 	case s.out <- msg:

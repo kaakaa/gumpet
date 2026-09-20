@@ -30,6 +30,9 @@ type Remark struct {
 	// Title is the heading on the balloon, naming where the remark came from.
 	// Empty for a saying out of a file, which came from nowhere in particular.
 	Title string
+	// At is when the feed says the entry appeared. Zero for a saying out of a
+	// file, and for a feed that dated nothing — plenty do not.
+	At time.Time
 }
 
 // Bundled is the list gumpet ships with, used when no file is configured or
