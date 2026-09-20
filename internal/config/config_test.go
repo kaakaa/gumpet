@@ -24,7 +24,7 @@ func TestRenderRoundTrips(t *testing.T) {
 				Window: Window{AlwaysOnTop: false, ClickThrough: false, SkipTaskbar: false},
 				Stage:  Stage{Display: 2, Fullscreen: true, Width: 800, Height: 600, Anchor: AnchorCustom, MarginX: 1, MarginY: 2, X: 30, Y: 40},
 				Pet:    Pet{Source: "/tmp/cat.gif", Scale: 0.75, FPS: 12.5, FlipWhenFacingRight: false},
-				Behavior: Behavior{Mode: ModeOnMessage, IdleOpacity: 0.2, Roam: RoamWander, Speed: 0,
+				Behavior: Behavior{Mode: ModeOnMessage, IdleOpacity: 0.2, Roam: RoamWander, Speed: 0, Jump: false,
 					Chatter: Chatter{Enabled: true, IntervalSec: 90.5, Source: "/tmp/my sayings.txt",
 						Feeds: []Feed{
 							{Name: "HN", URL: "https://news.ycombinator.com/rss"},

@@ -81,6 +81,9 @@ behavior:
   roam: {{ .Behavior.Roam }}
   # Walking speed, pixels per second.
   speed: {{ n .Behavior.Speed }}
+  # Hop now and then while on the floor. Only applies to the styles of roaming
+  # that have a floor: "none" and "horizontal".
+  jump: {{ .Behavior.Jump }}
   # Between messages the pet can talk to itself, so that it is doing something
   # even when nothing has arrived. Off unless you ask for it.
   chatter:

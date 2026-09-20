@@ -181,6 +181,7 @@ func New(o Options) *Game {
 	// A placeholder until the first Update can ask what monitor we are on.
 	g.monitor = layout.Rect{W: float64(cfg.Stage.Width), H: float64(cfg.Stage.Height)}
 	g.walker = roam.New(cfg.Behavior.Roam, g.stage(), g.petWidth(), g.petHeight(), cfg.Behavior.Speed, nil)
+	g.walker.SetJumping(cfg.Behavior.Jump)
 	g.winW, g.winH = int(math.Ceil(g.petWidth())), int(math.Ceil(g.petHeight()))
 	return g
 }
@@ -302,6 +303,7 @@ func (g *Game) onWantedMonitor() bool {
 
 func (g *Game) reshapeWalker() {
 	g.walker.Reshape(g.cfg.Behavior.Roam, g.stage(), g.petWidth(), g.petHeight(), g.cfg.Behavior.Speed)
+	g.walker.SetJumping(g.cfg.Behavior.Jump)
 }
 
 func (g *Game) stage() layout.Rect {
@@ -706,7 +708,9 @@ func (g *Game) advanceAnimation(dt time.Duration) {
 		g.frameIdx = 0
 		return
 	}
-	if g.walker.Paused() {
+	// A pet mid-hop holds its frame for the same reason a paused one does:
+	// legs working in mid-air are running on nothing.
+	if g.walker.Paused() || g.walker.Airborne() {
 		g.resetAnimation()
 		return
 	}

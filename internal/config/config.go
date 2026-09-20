@@ -175,6 +175,9 @@ type Behavior struct {
 	Roam Roam `yaml:"roam" json:"roam"`
 	// Speed is the walking speed in pixels per second.
 	Speed float64 `yaml:"speed" json:"speed"`
+	// Jump lets the pet hop now and then while it is on the floor, which is
+	// most of what stops a walk from reading as a patrol.
+	Jump bool `yaml:"jump" json:"jump"`
 	// Chatter is the pet talking to itself when nobody has sent it anything.
 	Chatter Chatter `yaml:"chatter" json:"chatter"`
 }
@@ -323,6 +326,7 @@ func Default() Config {
 			IdleOpacity: 0.35,
 			Roam:        RoamHorizontal,
 			Speed:       45,
+			Jump:        true,
 			Chatter: Chatter{
 				Enabled:     false,
 				IntervalSec: 600,

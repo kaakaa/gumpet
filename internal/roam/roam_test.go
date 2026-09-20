@@ -72,8 +72,11 @@ func TestNoneStartsOnTheFloor(t *testing.T) {
 	}
 }
 
+// A horizontal walk keeps to the floor, except while hopping, which lifts the
+// pet off it and puts it back. Never below it, in either case.
 func TestHorizontalStaysOnTheFloorAndInsideTheStage(t *testing.T) {
 	w := newWalker(t, config.RoamHorizontal)
+	w.SetJumping(false)
 	positions := walk(w, 60*time.Second)
 
 	assertInsideStage(t, positions)
@@ -81,6 +84,20 @@ func TestHorizontalStaysOnTheFloorAndInsideTheStage(t *testing.T) {
 	for i, p := range positions {
 		if p[1] != floor {
 			t.Fatalf("step %d: y = %v, want the floor at %v", i, p[1], floor)
+		}
+	}
+}
+
+// With hopping on, the floor is a bound rather than a fixed position.
+func TestAHoppingWalkNeverSinksBelowTheFloor(t *testing.T) {
+	w := newWalker(t, config.RoamHorizontal)
+	positions := walk(w, 120*time.Second)
+
+	assertInsideStage(t, positions)
+	floor := stage.Y + stage.H - petH
+	for i, p := range positions {
+		if p[1] > floor {
+			t.Fatalf("step %d: y = %v, which is below the floor at %v", i, p[1], floor)
 		}
 	}
 }
@@ -414,5 +431,214 @@ func TestTranslateKeepsThePetInsideTheStage(t *testing.T) {
 	}
 	if y < area.Y || y > area.Y+area.H-50 {
 		t.Errorf("y = %v, want it inside the stage", y)
+	}
+}
+
+// hopHeights runs the walker and returns how far above the floor it got on
+// each step, which is what every test about hopping is really asking about.
+func hopHeights(w *Walker, d time.Duration) []float64 {
+	floor := stage.Y + stage.H - petH
+	var out []float64
+	for elapsed := time.Duration(0); elapsed < d; elapsed += tick {
+		w.Step(tick)
+		_, y := w.Pos()
+		out = append(out, floor-y)
+	}
+	return out
+}
+
+func TestAPetOnTheFloorEventuallyHops(t *testing.T) {
+	w := newWalker(t, config.RoamHorizontal)
+	heights := hopHeights(w, 5*time.Minute)
+
+	var highest float64
+	for _, h := range heights {
+		if h > highest {
+			highest = h
+		}
+	}
+	if highest <= 0 {
+		t.Fatal("the pet never left the floor in five minutes")
+	}
+}
+
+// The arc has to come back down. A hop that leaves the pet hanging is worse
+// than no hop at all.
+func TestEveryHopLands(t *testing.T) {
+	w := newWalker(t, config.RoamHorizontal)
+	heights := hopHeights(w, 5*time.Minute)
+
+	airborne := 0
+	longest := 0
+	for _, h := range heights {
+		if h > 0 {
+			airborne++
+			if airborne > longest {
+				longest = airborne
+			}
+			continue
+		}
+		airborne = 0
+	}
+	if longest == 0 {
+		t.Fatal("never hopped")
+	}
+	// jumpSeconds of air at the test's tick rate, with room for rounding.
+	if maxTicks := int(jumpSeconds/tick.Seconds()) + 4; longest > maxTicks {
+		t.Errorf("a hop lasted %d ticks, want at most about %d", longest, maxTicks)
+	}
+	if last := heights[len(heights)-1]; last < 0 {
+		t.Errorf("finished %v below the floor", -last)
+	}
+}
+
+// The height comes from the pet, so that artwork of any size hops by an amount
+// that looks like its own.
+func TestAHopIsAboutAsHighAsThePetAsksFor(t *testing.T) {
+	w := newWalker(t, config.RoamHorizontal)
+	heights := hopHeights(w, 5*time.Minute)
+
+	var highest float64
+	for _, h := range heights {
+		if h > highest {
+			highest = h
+		}
+	}
+	want := jumpPeak * petH
+	if highest < want*0.8 || highest > want*1.2 {
+		t.Errorf("highest hop was %v, want roughly %v", highest, want)
+	}
+}
+
+func TestAHopCarriesThePetForward(t *testing.T) {
+	w := newWalker(t, config.RoamHorizontal)
+	floor := stage.Y + stage.H - petH
+
+	var movedWhileAirborne bool
+	lastX, _ := w.Pos()
+	for elapsed := time.Duration(0); elapsed < 5*time.Minute; elapsed += tick {
+		w.Step(tick)
+		x, y := w.Pos()
+		if floor-y > 0 && x != lastX {
+			movedWhileAirborne = true
+			break
+		}
+		lastX = x
+	}
+	if !movedWhileAirborne {
+		t.Error("the pet hopped on the spot, want it to hop along")
+	}
+}
+
+// Airborne is what tells the drawing to hold a frame, so it has to agree with
+// where the pet actually is.
+func TestAirborneAgreesWithBeingOffTheFloor(t *testing.T) {
+	w := newWalker(t, config.RoamHorizontal)
+	floor := stage.Y + stage.H - petH
+
+	for elapsed := time.Duration(0); elapsed < 5*time.Minute; elapsed += tick {
+		w.Step(tick)
+		_, y := w.Pos()
+		if off := floor-y > 0; off != w.Airborne() {
+			t.Fatalf("Airborne() = %v but the pet is %v above the floor", w.Airborne(), floor-y)
+		}
+	}
+}
+
+// Hopping belongs to a floor. Drifting about the middle of the screen has no
+// floor to leave, and walking the edges would mean hopping off a wall.
+func TestOnlyFloorWalkersHop(t *testing.T) {
+	for _, mode := range []config.Roam{config.RoamWander, config.RoamPerimeter} {
+		w := newWalker(t, mode)
+		for elapsed := time.Duration(0); elapsed < 5*time.Minute; elapsed += tick {
+			w.Step(tick)
+			if w.Airborne() {
+				t.Fatalf("%s hopped", mode)
+			}
+		}
+	}
+}
+
+// A pet told to stand still has nothing else to show it is running.
+func TestAStationaryPetStillHops(t *testing.T) {
+	w := newWalker(t, config.RoamNone)
+	heights := hopHeights(w, 5*time.Minute)
+
+	var hopped bool
+	startX, _ := w.Pos()
+	for _, h := range heights {
+		if h > 0 {
+			hopped = true
+		}
+	}
+	if !hopped {
+		t.Error("a stationary pet never hopped")
+	}
+	if x, _ := w.Pos(); x != startX {
+		t.Errorf("it wandered off to %v from %v; hopping should not move it sideways", x, startX)
+	}
+}
+
+func TestJumpingCanBeTurnedOff(t *testing.T) {
+	w := newWalker(t, config.RoamHorizontal)
+	w.SetJumping(false)
+
+	for elapsed := time.Duration(0); elapsed < 5*time.Minute; elapsed += tick {
+		w.Step(tick)
+		if w.Airborne() {
+			t.Fatal("hopped with jumping off")
+		}
+	}
+}
+
+// Turning it off mid-hop must put the pet down, not leave it in the air.
+func TestTurningJumpingOffLandsThePet(t *testing.T) {
+	w := newWalker(t, config.RoamHorizontal)
+	floor := stage.Y + stage.H - petH
+
+	for elapsed := time.Duration(0); elapsed < 5*time.Minute; elapsed += tick {
+		w.Step(tick)
+		if !w.Airborne() {
+			continue
+		}
+		w.SetJumping(false)
+		w.Step(tick)
+		if _, y := w.Pos(); y != floor {
+			t.Fatalf("left at %v after jumping was turned off, want the floor at %v", y, floor)
+		}
+		return
+	}
+	t.Skip("never got airborne")
+}
+
+// A patrol that only turns at the walls is a patrol. Changing its mind now and
+// then is most of what makes it read as alive.
+func TestThePetSometimesTurnsBackWithoutReachingAnEdge(t *testing.T) {
+	w := newWalker(t, config.RoamHorizontal)
+	w.SetJumping(false)
+	minX, maxX := w.xRange()
+
+	var turnedMidFloor bool
+	lastX, _ := w.Pos()
+	var lastDir float64
+	for elapsed := time.Duration(0); elapsed < 10*time.Minute; elapsed += tick {
+		w.Step(tick)
+		x, _ := w.Pos()
+		d := x - lastX
+		if d != 0 && lastDir != 0 && (d > 0) != (lastDir > 0) {
+			// In the middle half of the floor, so the wall did not cause it.
+			margin := (maxX - minX) / 4
+			if x > minX+margin && x < maxX-margin {
+				turnedMidFloor = true
+				break
+			}
+		}
+		if d != 0 {
+			lastDir = d
+		}
+		lastX = x
+	}
+	if !turnedMidFloor {
+		t.Error("the pet only ever turned at the walls")
 	}
 }
