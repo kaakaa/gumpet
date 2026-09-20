@@ -26,6 +26,24 @@ const (
 	maxPauseSeconds = 4
 )
 
+// jumpChancePerSecond works out at a hop every twenty seconds or so — often
+// enough to catch the eye now and then, rare enough that it stays a surprise.
+const jumpChancePerSecond = 0.05
+
+// jumpSeconds is how long a hop is in the air, and jumpPeak how high it goes
+// as a fraction of the pet's own height. Taking the height from the pet rather
+// than from a setting is what lets a twelve-pixel sprite and a two-hundred
+// pixel illustration both hop convincingly without anyone adjusting anything.
+const (
+	jumpSeconds = 0.55
+	jumpPeak    = 0.7
+)
+
+// turnAfterPauseChance is how often a pet that has stopped to look around
+// decides to go back the way it came, rather than only ever turning when it
+// runs out of floor.
+const turnAfterPauseChance = 0.35
+
 // Walker carries the pet around the stage. Its zero value is not usable; call
 // [New].
 type Walker struct {
@@ -41,12 +59,17 @@ type Walker struct {
 	// leg is which edge of the stage a perimeter walk is currently on.
 	leg      int
 	pauseFor time.Duration
+	// jumping says whether the pet may hop at all.
+	jumping bool
+	// lift is how far above the floor a hop has carried the pet, and rise how
+	// fast it is still going up. Both are zero on the ground.
+	lift, rise float64
 }
 
 // New starts a walker somewhere random on the stage. rnd may be nil, in which
 // case the global source is used.
 func New(mode config.Roam, area Rect, petW, petH, speed float64, rnd *rand.Rand) *Walker {
-	w := &Walker{mode: mode, area: area, petW: petW, petH: petH, speed: speed, rnd: rnd}
+	w := &Walker{mode: mode, area: area, petW: petW, petH: petH, speed: speed, rnd: rnd, jumping: true}
 	w.placeRandomly()
 	w.launch()
 	return w
@@ -108,10 +131,19 @@ func (w *Walker) Moving() bool {
 // Step advances the walk by dt.
 func (w *Walker) Step(dt time.Duration) {
 	if w.mode == config.RoamNone || w.speed <= 0 {
+		// A pet that does not walk can still hop, and for a stationary one
+		// that is the only sign of life it has.
+		w.stepJump(dt)
+		if w.jumps() {
+			w.y = w.floor() - w.lift
+			w.clamp()
+		}
 		return
 	}
 	if w.pauseFor > 0 {
-		w.pauseFor -= dt
+		if w.pauseFor -= dt; w.pauseFor <= 0 {
+			w.afterPause()
+		}
 		return
 	}
 	// Decide about stopping before moving, so that a step the pet is paused
@@ -119,6 +151,8 @@ func (w *Walker) Step(dt time.Duration) {
 	if w.maybePause(); w.pauseFor > 0 {
 		return
 	}
+
+	w.stepJump(dt)
 
 	switch w.mode {
 	case config.RoamHorizontal:
@@ -131,9 +165,82 @@ func (w *Walker) Step(dt time.Duration) {
 	w.clamp()
 }
 
+// afterPause is the pet setting off again. Sometimes it goes back the way it
+// came: a walk that only ever turns when it runs out of floor is a patrol, and
+// changing its mind now and then is most of the difference.
+func (w *Walker) afterPause() {
+	if w.mode != config.RoamHorizontal || w.rand() >= turnAfterPauseChance {
+		return
+	}
+	w.vx = -w.vx
+}
+
 // Paused reports whether the pet has stopped to look around, which is what
 // tells the caller to hold its animation on one frame.
 func (w *Walker) Paused() bool { return w.pauseFor > 0 }
+
+// Airborne reports whether the pet is mid-hop. Like [Walker.Paused] it tells
+// the caller to hold the animation: a pet working its legs in mid-air is
+// running on nothing.
+func (w *Walker) Airborne() bool { return w.lift > 0 }
+
+// SetJumping turns hopping on and off.
+func (w *Walker) SetJumping(on bool) {
+	w.jumping = on
+	if !on {
+		w.lift, w.rise = 0, 0
+	}
+}
+
+// jumps reports whether this style of roaming is one a hop makes sense in.
+// Hopping is a thing you do on a floor: a pet drifting about the middle of the
+// screen has no floor to leave, and one walking the edges would be hopping off
+// a wall.
+func (w *Walker) jumps() bool {
+	if !w.jumping {
+		return false
+	}
+	return w.mode == config.RoamHorizontal || w.mode == config.RoamNone
+}
+
+// stepJump advances a hop, starting one now and then if the pet is on the
+// ground. The arc is a plain parabola: up at a fixed speed, pulled down at a
+// fixed rate, landing after jumpSeconds.
+func (w *Walker) stepJump(dt time.Duration) {
+	if !w.jumps() {
+		w.lift, w.rise = 0, 0
+		return
+	}
+
+	if w.lift <= 0 {
+		// Not mid-hop. A pet that has stopped to look around does not hop
+		// either: the pause is the pet standing still, and hopping through it
+		// would read as two minds.
+		if w.pauseFor > 0 || w.rand() >= jumpChancePerSecond/60 {
+			w.lift, w.rise = 0, 0
+			return
+		}
+		w.rise = w.jumpSpeed()
+	}
+
+	w.lift += w.rise * dt.Seconds()
+	w.rise -= w.gravity() * dt.Seconds()
+	if w.lift <= 0 {
+		// Landed. Settle exactly on the floor rather than a hair below it.
+		w.lift, w.rise = 0, 0
+	}
+}
+
+// gravity and jumpSpeed are chosen together so that a hop peaks at jumpPeak of
+// the pet's height and is back down after jumpSeconds.
+func (w *Walker) gravity() float64 {
+	up := jumpSeconds / 2
+	return 2 * (jumpPeak * w.petH) / (up * up)
+}
+
+func (w *Walker) jumpSpeed() float64 {
+	return w.gravity() * (jumpSeconds / 2)
+}
 
 // launch settles the pet into its style of roaming from wherever it was
 // dropped, and points it somewhere.
@@ -220,7 +327,10 @@ func (w *Walker) floor() float64 {
 }
 
 func (w *Walker) stepHorizontal(dt time.Duration) {
-	w.y = w.area.Y + w.area.H - w.petH
+	// The floor, less however far a hop has lifted the pet off it. Written
+	// here rather than added afterwards because this line otherwise pins the
+	// pet down every tick and a hop would never leave the ground.
+	w.y = w.floor() - w.lift
 	if w.vx == 0 {
 		w.vx = w.speed * w.sign()
 	}
