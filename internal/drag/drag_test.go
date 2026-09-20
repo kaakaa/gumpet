@@ -202,3 +202,77 @@ func TestASecondGestureStartsClean(t *testing.T) {
 		t.Error("the second gesture was reported as a drag")
 	}
 }
+
+// Pressed has to be true from the press itself. A caller that waits for
+// Dragging before calling Move waits forever: Dragging cannot become true
+// until Move has run.
+func TestPressedIsTrueBeforeTheThresholdIsCrossed(t *testing.T) {
+	var d Tracker
+	stage := stageAt(100, 100)
+
+	if d.Pressed() {
+		t.Error("a fresh tracker says a press is in progress")
+	}
+	d.Press(200, 200, stage)
+	if !d.Pressed() {
+		t.Fatal("not pressed straight after Press")
+	}
+	if d.Dragging() {
+		t.Error("dragging before moving")
+	}
+	d.Release()
+	if d.Pressed() {
+		t.Error("still pressed after Release")
+	}
+}
+
+// The bug this pins: a caller that only advanced the gesture while Dragging
+// never advanced it at all, so dragging did nothing and every attempt ended as
+// a click. This is that caller's loop, written the right way round.
+func TestAGestureDrivenFromPressedActuallyDrags(t *testing.T) {
+	var d Tracker
+	stage := stageAt(100, 100)
+	monitor := Rect{W: 1920, H: 1080}
+
+	d.Press(500, 500, stage)
+
+	// The cursor travels a pixel per frame, as a hand does.
+	var dragged bool
+	for i := 1; i <= 40; i++ {
+		if !d.Pressed() {
+			t.Fatal("the gesture ended on its own")
+		}
+		x, y, dragging := d.Move(500+float64(i), 500, stage, monitor)
+		if dragging {
+			dragged = true
+			stage.X, stage.Y = x, y
+		}
+	}
+	if !dragged {
+		t.Fatal("moved forty pixels without ever starting a drag")
+	}
+	if stage.X == 100 {
+		t.Error("the stage never moved")
+	}
+	if !d.Release() {
+		t.Error("Release called it a click")
+	}
+}
+
+// And the other half: a press driven the same way that never moves is still a
+// click, so the menu still opens.
+func TestAGestureDrivenFromPressedThatNeverMovesIsAClick(t *testing.T) {
+	var d Tracker
+	stage := stageAt(100, 100)
+	monitor := Rect{W: 1920, H: 1080}
+
+	d.Press(500, 500, stage)
+	for i := 0; i < 40; i++ {
+		if _, _, dragging := d.Move(500, 500, stage, monitor); dragging {
+			t.Fatal("a still cursor started a drag")
+		}
+	}
+	if d.Release() {
+		t.Error("Release called it a drag")
+	}
+}
