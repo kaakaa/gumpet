@@ -23,7 +23,7 @@ func TestRenderRoundTrips(t *testing.T) {
 				Server: Server{Addr: "127.0.0.1:9999", Token: "s3cret"},
 				Window: Window{AlwaysOnTop: false, ClickThrough: false, SkipTaskbar: false},
 				Stage:  Stage{Display: 2, Fullscreen: true, Width: 800, Height: 600, Anchor: AnchorCustom, MarginX: 1, MarginY: 2, X: 30, Y: 40},
-				Pet:    Pet{Source: "/tmp/cat.gif", Scale: 0.75, FPS: 12.5, FlipWhenFacingRight: false},
+				Pet:    Pet{Source: "/tmp/cat.gif", Scale: 0.75, FPS: 12.5, FlipWhenFacingRight: false, Smooth: SmoothOff},
 				Behavior: Behavior{Mode: ModeOnMessage, IdleOpacity: 0.2, Roam: RoamWander, Speed: 0, Jump: false,
 					Chatter: Chatter{Enabled: true, IntervalSec: 90.5, Source: "/tmp/my sayings.txt",
 						Feeds: []Feed{
@@ -170,6 +170,8 @@ func TestValidateRejectsBadValues(t *testing.T) {
 		{"negative display", func(c *Config) { c.Stage.Display = -1 }},
 		{"negative scale", func(c *Config) { c.Pet.Scale = -1 }},
 		{"zero fps", func(c *Config) { c.Pet.FPS = 0 }},
+		{"unknown smoothing", func(c *Config) { c.Pet.Smooth = "blurry" }},
+		{"empty smoothing", func(c *Config) { c.Pet.Smooth = "" }},
 		{"unknown mode", func(c *Config) { c.Behavior.Mode = "sometimes" }},
 		{"zero idle opacity", func(c *Config) { c.Behavior.IdleOpacity = 0 }},
 		{"negative idle opacity", func(c *Config) { c.Behavior.IdleOpacity = -0.5 }},
@@ -382,5 +384,25 @@ func TestTheOldFeedIsWrittenBackAsAList(t *testing.T) {
 	if !reflect.DeepEqual(again.Behavior.Chatter.Feeds, cfg.Behavior.Chatter.Feeds) {
 		t.Errorf("after a save the feeds became %+v, want %+v",
 			again.Behavior.Chatter.Feeds, cfg.Behavior.Chatter.Feeds)
+	}
+}
+
+// "auto" is what makes a bundled pixel pet look right without anyone touching
+// a setting, so the three values have to mean what they say.
+func TestSmoothingDefersToTheArtworkOnlyWhenAuto(t *testing.T) {
+	cases := []struct {
+		smoothing Smoothing
+		artwork   bool
+		want      bool
+	}{
+		{SmoothAuto, true, true},
+		{SmoothAuto, false, false},
+		{SmoothOn, false, true},
+		{SmoothOff, true, false},
+	}
+	for _, c := range cases {
+		if got := c.smoothing.Smoothed(c.artwork); got != c.want {
+			t.Errorf("%q.Smoothed(%v) = %v, want %v", c.smoothing, c.artwork, got, c.want)
+		}
 	}
 }

@@ -163,6 +163,38 @@ type Pet struct {
 	// FlipWhenFacingRight mirrors the artwork when the pet walks right, which
 	// is what you want for a pet drawn facing left.
 	FlipWhenFacingRight bool `yaml:"flip_when_facing_right" json:"flip_when_facing_right"`
+	// Smooth decides how the artwork is enlarged: "auto" lets the artwork
+	// decide, which is right for everything bundled, and "on"/"off" overrides
+	// it for artwork of your own. Pixel art wants "off" — smoothing it only
+	// blurs the squares it is drawn from.
+	Smooth Smoothing `yaml:"smooth" json:"smooth"`
+}
+
+// Smoothing is how a pet's artwork is enlarged.
+type Smoothing string
+
+// The ways artwork can be enlarged.
+const (
+	SmoothAuto Smoothing = "auto"
+	SmoothOn   Smoothing = "on"
+	SmoothOff  Smoothing = "off"
+)
+
+// Smoothings lists the valid values, for validation and for the settings page.
+var Smoothings = []Smoothing{SmoothAuto, SmoothOn, SmoothOff}
+
+// Smoothed reports whether artwork should be smoothed, given what the artwork
+// itself asks for. "auto" defers to the artwork, which is how a bundled pixel
+// pet stays sharp without anyone touching a setting.
+func (s Smoothing) Smoothed(artworkWants bool) bool {
+	switch s {
+	case SmoothOn:
+		return true
+	case SmoothOff:
+		return false
+	default:
+		return artworkWants
+	}
 }
 
 // Behavior is how the pet acts between messages.
@@ -320,6 +352,7 @@ func Default() Config {
 			Scale:               1,
 			FPS:                 8,
 			FlipWhenFacingRight: true,
+			Smooth:              SmoothAuto,
 		},
 		Behavior: Behavior{
 			Mode:        ModeAlways,
@@ -435,6 +468,9 @@ func (c Config) Validate() error {
 			return fmt.Errorf("behavior.chatter.feeds[%d].name must be a single line", i)
 		}
 	}
+	if !validSmoothing(c.Pet.Smooth) {
+		return fmt.Errorf("pet.smooth must be one of %v, got %q", Smoothings, c.Pet.Smooth)
+	}
 	if c.Message.DurationSec <= 0 {
 		return fmt.Errorf("message.duration_sec must be positive, got %v", c.Message.DurationSec)
 	}
@@ -460,6 +496,15 @@ func (c Config) Validate() error {
 		return fmt.Errorf("history.hours must not be negative, got %v", c.History.Hours)
 	}
 	return nil
+}
+
+func validSmoothing(s Smoothing) bool {
+	for _, valid := range Smoothings {
+		if s == valid {
+			return true
+		}
+	}
+	return false
 }
 
 func validAnchor(a Anchor) bool {

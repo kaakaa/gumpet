@@ -11,6 +11,7 @@ import (
 	"github.com/kaakaa/gumpet/internal/config"
 	"github.com/kaakaa/gumpet/internal/drag"
 	"github.com/kaakaa/gumpet/internal/message"
+	"github.com/kaakaa/gumpet/internal/petsrc"
 	"github.com/kaakaa/gumpet/internal/richtext"
 )
 
@@ -80,6 +81,16 @@ func (g *Game) buildMenu() *menu {
 			detail: "browser",
 			closes: true,
 			action: func() error { return browser.Open("http://" + cfg.Server.Addr + "/") },
+		},
+		menuItem{
+			label:  "Pet",
+			detail: petLabel(cfg.Pet.Source),
+			rule:   true,
+			action: func() error {
+				return g.store.Update(func(c *config.Config) {
+					c.Pet.Source = nextPet(c.Pet.Source)
+				})
+			},
 		},
 		menuItem{
 			label:  "Walk",
@@ -290,21 +301,23 @@ func (g *Game) handleDrag(mx, my float64, onPet bool, onBalloon int) (done bool,
 	draggable := !g.cfg.Stage.Fullscreen
 
 	if inpututil.IsMouseButtonJustReleased(ebiten.MouseButtonLeft) {
+		wasPress := g.drag.Pressed()
 		if wasDrag := g.drag.Release(); wasDrag {
 			g.saveDraggedStage()
 			return true, nil
 		}
-		if g.dragPressedPet {
-			g.dragPressedPet = false
+		if wasPress {
 			// A press and release that went nowhere is a click after all.
 			g.menu = g.buildMenu()
 			g.menuIdle = 0
 			return true, nil
 		}
-		g.dragPressedPet = false
 	}
 
-	if g.drag.Dragging() || g.dragActive {
+	// Driven from Pressed, not Dragging: Dragging cannot become true until
+	// Move has been called, so asking it here first is a loop that never
+	// starts — which is exactly what it did.
+	if g.drag.Pressed() {
 		st := g.stage()
 		x, y, dragging := g.drag.Move(mx, my,
 			drag.Rect{X: st.X, Y: st.Y, W: st.W, H: st.H},
@@ -326,7 +339,6 @@ func (g *Game) handleDrag(mx, my float64, onPet bool, onBalloon int) (done bool,
 		inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
 		st := g.stage()
 		g.drag.Press(mx, my, drag.Rect{X: st.X, Y: st.Y, W: st.W, H: st.H})
-		g.dragPressedPet = true
 		return true, nil
 	}
 	return false, nil
@@ -352,7 +364,6 @@ func (g *Game) saveDraggedStage() {
 // snaps back to what the settings say.
 func (g *Game) endDrag(keep bool) {
 	g.drag.Cancel()
-	g.dragPressedPet = false
 	g.dragActive = false
 	if !keep {
 		g.reshapeWalker()
@@ -448,6 +459,38 @@ func (g *Game) openLink(url string) {
 	if err := browser.Open(url); err != nil {
 		g.log.Error("could not open a link", "url", url, "error", err)
 	}
+}
+
+// nextPet steps through the bundled pets. Artwork of one's own is left alone:
+// cycling away from a path the user typed in would lose it, and there is no
+// sensible place in the ring to put it back.
+func nextPet(source string) string {
+	if source != "" {
+		if _, ok := petsrc.BuiltinNamed(source); !ok {
+			return source
+		}
+	}
+	current := source
+	if current == "" {
+		current = petsrc.Builtins[0].Name
+	}
+	for i, p := range petsrc.Builtins {
+		if p.Name == current {
+			return petsrc.Builtins[(i+1)%len(petsrc.Builtins)].Name
+		}
+	}
+	return petsrc.Builtins[0].Name
+}
+
+// petLabel names what is showing, for the menu's right-hand column.
+func petLabel(source string) string {
+	if source == "" {
+		return petsrc.Builtins[0].Label
+	}
+	if p, ok := petsrc.BuiltinNamed(source); ok {
+		return p.Label
+	}
+	return "custom"
 }
 
 // idleLabel says what the pet does with itself between messages.

@@ -31,6 +31,11 @@ type Pack struct {
 	Talk []Frame
 	// Size is the size of the artwork in source pixels.
 	Size image.Point
+	// Scale and Smooth are the artwork's own idea of how it should be drawn:
+	// how much to enlarge it before pet.scale applies, and whether enlarging
+	// it should be smoothed. See [petsrc.Source].
+	Scale  float64
+	Smooth bool
 }
 
 // TalkFrames returns the animation to play while a message is up.
@@ -48,10 +53,12 @@ func Load(source string) (*Pack, error) {
 		return nil, err
 	}
 	return &Pack{
-		Name: src.Name,
-		Walk: toFrames(src.Walk),
-		Talk: toFrames(src.Talk),
-		Size: src.Size,
+		Name:   src.Name,
+		Walk:   toFrames(src.Walk),
+		Talk:   toFrames(src.Talk),
+		Size:   src.Size,
+		Scale:  src.Scale,
+		Smooth: src.Smooth,
 	}, nil
 }
 

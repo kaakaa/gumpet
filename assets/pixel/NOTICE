@@ -1,0 +1,11 @@
+gopher.gif is the running gopher sprite from
+https://github.com/egonelbre/gophers (animation/2bit-sprite/run.gif), by
+Egon Elbre, released under CC0 1.0 Universal (public domain dedication):
+https://creativecommons.org/publicdomain/zero/1.0/
+
+It has been enlarged eight times with nearest-neighbour sampling so that the
+pixels stay square; nothing else was changed.
+
+CC0 waives rights in the drawing, not in the character. The gopher was created
+by Renée French, and the character is licensed under Creative Commons 3.0
+Attribution: https://creativecommons.org/licenses/by/3.0/

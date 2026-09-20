@@ -54,15 +54,30 @@ stage:
   y: {{ .Stage.Y }}
 
 pet:
-  # A PNG/JPEG file, an animated GIF, or a directory of frames.
-  # Empty means the bundled gopher.
+  # One of the bundled pets by name, or artwork of your own: a PNG/JPEG file,
+  # an animated GIF, or a directory of frames. Empty means the gopher.
+  #
+  #   gopher    the original walking gopher
+  #   pixel     a pixel-art gopher, and the only one that runs
+  #   blue      an illustrated gopher, standing
+  #   strawhat  the same, in a hat, mid-stride
+  #   pink      the same again, pink and pleased about it
+  #
+  # A name wins over a file of the same spelling; write ./pink to mean the file.
   source: {{ q .Pet.Source }}
+  # Size relative to how the artwork is meant to be drawn, so 1 looks right
+  # whichever pet is chosen.
   scale: {{ n .Pet.Scale }}
   # Frame rate for sources with no timing of their own. Animated GIFs use the
   # delays stored in the file instead.
   fps: {{ n .Pet.FPS }}
   # Mirror the artwork when walking right (the bundled gopher faces left).
   flip_when_facing_right: {{ .Pet.FlipWhenFacingRight }}
+  # How the artwork is enlarged.
+  #   auto  let the artwork decide; right for everything bundled
+  #   on    smooth it, for drawings and photographs
+  #   off   keep the edges hard, for pixel art
+  smooth: {{ .Pet.Smooth }}
 
 behavior:
   # always     - the pet is always on screen
