@@ -59,6 +59,9 @@ type fonts struct {
 	name    string
 	message fontFace
 	menu    fontFace
+	// stamp is the timestamp in the corner of a balloon, which follows the
+	// message size so that turning the text up does not leave it behind.
+	stamp fontFace
 
 	source      *text.GoTextFaceSource
 	path        string
@@ -92,6 +95,7 @@ func (g *Game) ensureFonts() {
 	}
 	g.fonts.message = g.buildFace(source, g.cfg.Message.TextScale)
 	g.fonts.menu = g.buildFace(source, menuTextScale)
+	g.fonts.stamp = g.buildFace(source, g.cfg.Message.TextScale*stampTextScale)
 	g.panelDirty = true
 	if g.menu != nil {
 		g.menu = g.buildMenu()

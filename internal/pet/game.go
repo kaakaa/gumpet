@@ -483,6 +483,7 @@ func (g *Game) advanceChatter(dt time.Duration) {
 			Text:  remark.Text,
 			Title: remark.Title,
 			Level: message.LevelInfo,
+			At:    remark.At,
 		},
 		remaining: time.Duration(g.cfg.Message.DurationSec * float64(time.Second)),
 		idle:      true,
@@ -583,7 +584,10 @@ func fetchAll(feeds []config.Feed, maxAge time.Duration, log *slog.Logger) [][]c
 	for _, g := range feed.NewFetcher().FetchAll(context.Background(), sources, maxAge, log) {
 		remarks := make([]chatter.Remark, 0, len(g.Items))
 		for _, it := range g.Items {
-			remarks = append(remarks, chatter.Remark{Text: it.Text(), Title: g.Name})
+			// Published is carried rather than written into the text: the
+			// balloon draws it small and off to the side, and a date in the
+			// middle of a headline would be read as part of it.
+			remarks = append(remarks, chatter.Remark{Text: it.Text(), Title: g.Name, At: it.Published})
 		}
 		groups = append(groups, remarks)
 	}

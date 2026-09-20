@@ -4,6 +4,7 @@ import (
 	"image/color"
 	"math"
 	"strings"
+	"time"
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/text/v2"
@@ -27,6 +28,12 @@ const (
 	balloonStackGap = 5.0
 	// titleGap separates a message's heading from its text.
 	titleGap = 3.0
+	// stampTextScale shrinks the timestamp relative to the message. It is
+	// chrome rather than content: enough to read when looked for, not enough
+	// to compete with what the pet is actually saying.
+	stampTextScale = 0.7
+	// stampGap keeps the timestamp clear of a heading sharing its line.
+	stampGap = 10.0
 	// underlineDrop is how far below the baseline box a link's underline sits.
 	underlineDrop = 1.0
 )
@@ -40,6 +47,9 @@ var (
 	ruleColor   = color.NRGBA{R: 0x00, G: 0x00, B: 0x00, A: 0x22}
 	debugBorder = color.NRGBA{R: 0xff, G: 0x00, B: 0x00, A: 0x66}
 	linkColor   = color.NRGBA{R: 0x00, G: 0x5f, B: 0xa8, A: 0xff}
+	// stampColor is fainter than mutedColor, and stays the same whatever the
+	// level: when a message arrived says nothing about how loud it is.
+	stampColor = color.NRGBA{R: 0x70, G: 0x70, B: 0x70, A: 0xaa}
 )
 
 // levelColors give each level a border for its balloon and a colour for its
@@ -68,8 +78,14 @@ type balloon struct {
 	// width and height include the padding around the text.
 	width, height float64
 	textW, textH  float64
-	// titleH is the height of the heading and the gap under it, or zero.
-	titleH float64
+	// headH is the height of the heading row — the title, the timestamp, or
+	// both — and the gap under it, or zero when there is neither.
+	headH float64
+	// stamp is when the message arrived or when its feed dated it, drawn small
+	// and faint at the end of the heading row. Empty when nothing is known.
+	stamp string
+	// stampX and stampY place it relative to the balloon's top-left corner.
+	stampX, stampY float64
 	// lineH is the baseline-to-baseline distance the lines were laid out at,
 	// kept so that a click can be turned back into a line number.
 	lineH float64
@@ -98,18 +114,51 @@ func (g *Game) layoutBalloon(msg message.Message) *balloon {
 	b.runes = richtext.Runes(lines)
 	b.border, b.accent = colorsFor(msg.Level)
 
+	// The stamp is measured before the heading is wrapped, because it shares
+	// that line: what it takes is not available to wrap the heading into.
+	b.stamp = message.Stamp(msg.At, time.Now())
+	var stampW, headW, headLineH float64
+	if b.stamp != "" {
+		stampW = g.fonts.stamp.Advance(b.stamp)
+		headW, headLineH = stampW, g.fonts.stamp.lineHeight()
+	}
+
 	if msg.Title != "" {
 		// A heading is not scanned for links: it names where the message came
 		// from, and a sender that wants a link puts it in the text.
-		b.title = richtext.Wrap([]richtext.Span{{Text: msg.Title}}, f, maxText)
-		b.titleH = float64(len(b.title))*f.lineHeight() + titleGap
-		if w := richtext.BlockWidth(b.title); w > b.textW {
-			b.textW = w
+		titleMax := maxText
+		if b.stamp != "" {
+			titleMax = math.Max(maxText-stampGap-stampW, 1)
 		}
+		b.title = richtext.Wrap([]richtext.Span{{Text: msg.Title}}, f, titleMax)
+		headLineH = math.Max(headLineH, float64(len(b.title))*f.lineHeight())
+		headW = richtext.BlockWidth(b.title)
+		if b.stamp != "" {
+			headW += stampGap + stampW
+		}
+	}
+	if headLineH > 0 {
+		b.headH = headLineH + titleGap
+	}
+	if headW > b.textW {
+		b.textW = headW
 	}
 
 	b.width = b.textW + 2*balloonPadding
-	b.height = b.titleH + b.textH + 2*balloonPadding
+	b.height = b.headH + b.textH + 2*balloonPadding
+
+	if b.stamp != "" {
+		b.stampX = b.width - balloonPadding - stampW
+		// Sit the stamp on the baseline of the heading's *first* line, rather
+		// than its own top or the bottom of a heading that wrapped: a smaller
+		// face aligned at the top floats above the words beside it, and one
+		// aligned at the bottom drifts away from them entirely.
+		firstLineH := g.fonts.stamp.lineHeight()
+		if len(b.title) > 0 {
+			firstLineH = f.lineHeight()
+		}
+		b.stampY = balloonPadding + firstLineH - g.fonts.stamp.lineHeight()
+	}
 	return b
 }
 
@@ -125,7 +174,7 @@ type linkRect struct {
 // clicked cannot drift apart.
 func (b *balloon) links() []linkRect {
 	var out []linkRect
-	top := balloonPadding + b.titleH
+	top := balloonPadding + b.headH
 	for i, line := range b.lines {
 		for _, run := range line.Runs {
 			if !run.Style.IsLink() {
@@ -223,6 +272,12 @@ func (g *Game) drawBalloons(screen *ebiten.Image) {
 			g.drawRichText(screen, b.title, (x+balloonPadding)*ds, (y+balloonPadding)*ds,
 				g.fonts.message, b.accent)
 		}
+		// The stamp appears whole from the start, like the heading: a time
+		// revealed a digit at a time would be unreadable until it finished.
+		if b.stamp != "" {
+			g.drawText(screen, []string{b.stamp}, (x+b.stampX)*ds, (y+b.stampY)*ds,
+				g.fonts.stamp, stampColor)
+		}
 		// The balloon was sized and wrapped for the whole message, so what is
 		// drawn here is only the part said so far. Nothing moves as the rest
 		// arrives.
@@ -230,7 +285,7 @@ func (g *Game) drawBalloons(screen *ebiten.Image) {
 		if typed := int(g.showing[i].typed); typed < b.runes {
 			lines = richtext.Reveal(lines, typed, g.fonts.message)
 		}
-		g.drawRichText(screen, lines, (x+balloonPadding)*ds, (y+balloonPadding+b.titleH)*ds,
+		g.drawRichText(screen, lines, (x+balloonPadding)*ds, (y+balloonPadding+b.headH)*ds,
 			g.fonts.message, textColor)
 	}
 }

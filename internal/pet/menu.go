@@ -65,9 +65,11 @@ func (g *Game) buildMenu() *menu {
 			rule:   true,
 			closes: true,
 			action: func() error {
+				now := time.Now()
 				msg := message.Message{
-					Text:  "Hello! " + time.Now().Format("15:04:05"),
+					Text:  "Hello! " + now.Format("15:04:05"),
 					Level: message.LevelInfo,
+					At:    now,
 				}
 				if g.history != nil {
 					msg.ID = g.history.Add(msg).ID
