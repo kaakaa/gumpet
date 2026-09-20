@@ -60,10 +60,10 @@ var builtinFrames = []string{"gopher/out01.png", "gopher/out02.png", "gopher/out
 // for by a path that says so — "./pink" rather than "pink".
 var Builtins = []Pet{
 	{Name: "gopher", Label: "Gopher", Scale: 1, Smooth: true},
-	{Name: "pixel", Label: "Pixel", file: "pixel/gopher.gif", Scale: 1, Smooth: false},
-	{Name: "blue", Label: "Blue", file: "blue/gopher.png", Scale: 1, Smooth: true},
-	{Name: "strawhat", Label: "Straw hat", file: "strawhat/gopher.png", Scale: 1, Smooth: true},
-	{Name: "pink", Label: "Pink", file: "pink/gopher.png", Scale: 1, Smooth: true},
+	{Name: "pixel", Label: "Pixel gopher", file: "pixel/gopher.gif", Scale: 1, Smooth: false},
+	{Name: "astro", Label: "Astronaut", file: "astro/pet.gif", Scale: 1, Smooth: false},
+	{Name: "rose", Label: "Rose", file: "rose/pet.gif", Scale: 1, Smooth: false},
+	{Name: "flier", Label: "Flier", file: "flier/pet.gif", Scale: 1, Smooth: false},
 }
 
 // Pet is one of the bundled pets.

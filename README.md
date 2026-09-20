@@ -249,10 +249,12 @@ page, or by name in `pet.source`:
 | | |
 | --- | --- |
 | `gopher` | the original walking gopher, and the default |
-| `pixel` | a pixel-art gopher, and the only one that runs |
-| `blue` | an illustrated gopher, standing |
-| `strawhat` | the same, in a hat, caught mid-stride |
-| `pink` | the same again, pink and pleased about it |
+| `pixel` | a pixel-art gopher, running |
+| `astro` | something small and green in a space helmet |
+| `rose` | the same idea, in pink |
+| `flier` | a winged thing, flapping |
+
+All of them move. A pet that stands still is a picture stuck to the desktop.
 
 `pet.scale` means the same thing for all of them: 1 is how that artwork is
 meant to look, whether it was drawn at twelve pixels or five thousand.
@@ -370,12 +372,13 @@ drew any particular one.
 | --- | --- | --- |
 | `gopher` | [mattn/gopher](https://github.com/mattn/gopher), MIT | [NOTICE](assets/gopher/NOTICE) |
 | `pixel` | [egonelbre/gophers](https://github.com/egonelbre/gophers), CC0 1.0 | [NOTICE](assets/pixel/NOTICE) |
-| `blue`, `strawhat`, `pink` | [MariaLetta/free-gophers-pack](https://github.com/MariaLetta/free-gophers-pack), CC0 1.0 | [NOTICE](assets/blue/NOTICE) |
+| `astro`, `rose`, `flier` | [Kenney](https://kenney.nl/assets/pixel-platformer), CC0 1.0 | [NOTICE](assets/astro/NOTICE) |
 
-The gopher character was created by Renée French and is used under
+The two gophers are of a character created by Renée French, used under
 [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/). CC0 waives rights in
-a drawing; it does not waive anything in the character that drawing is of.
+a drawing; it does not waive anything in the character that drawing is of. The
+Kenney sprites are nobody's character but their own.
 
-The bundled images have been resized — the pixel sprite enlarged eight times
-with nearest-neighbour sampling so its pixels stay square, the illustrations
-scaled down from 5000×5000 to 200×200 — and are otherwise unchanged.
+The bundled images have been enlarged by a whole number with nearest-neighbour
+sampling, so their pixels stay square, and the multi-tile ones assembled into
+animations. They are otherwise unchanged.

@@ -12,7 +12,7 @@ import "embed"
 // images so that a binary carries its own attribution rather than relying on
 // the repository being at hand.
 //
-//go:embed gopher/* pixel/* blue/* strawhat/* pink/*
+//go:embed gopher/* pixel/* astro/* rose/* flier/*
 var Pets embed.FS
 
 // Gopher is the original bundled pet, kept as its own name because it is the

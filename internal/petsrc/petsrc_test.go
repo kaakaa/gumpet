@@ -255,7 +255,7 @@ func TestPixelArtAsksNotToBeSmoothed(t *testing.T) {
 
 	// Everything else does want smoothing, since it is enlarged from artwork
 	// that was never a grid of squares.
-	for _, name := range []string{"gopher", "blue", "strawhat", "pink"} {
+	for _, name := range []string{"gopher"} {
 		s, err := Load(name)
 		if err != nil {
 			t.Fatalf("Load(%q): %v", name, err)
@@ -268,10 +268,10 @@ func TestPixelArtAsksNotToBeSmoothed(t *testing.T) {
 
 // A name beats a path, but only for the exact spellings in Builtins.
 func TestABuiltinNameIsNotMistakenForAPath(t *testing.T) {
-	if _, ok := BuiltinNamed("pink"); !ok {
-		t.Error("pink is not a built-in")
+	if _, ok := BuiltinNamed("rose"); !ok {
+		t.Error("rose is not a built-in")
 	}
-	for _, notBuiltin := range []string{"./pink", "pink.png", "PINK", "", "gopher/out01.png"} {
+	for _, notBuiltin := range []string{"./rose", "rose.gif", "ROSE", "", "gopher/out01.png"} {
 		if _, ok := BuiltinNamed(notBuiltin); ok {
 			t.Errorf("BuiltinNamed(%q) matched, want it treated as a path", notBuiltin)
 		}
@@ -292,4 +292,56 @@ func TestTheBundledPetsAreComparableSizes(t *testing.T) {
 				pet.Name, drawn)
 		}
 	}
+}
+
+// Every bundled pet moves. A still pet is a picture stuck to the desktop, and
+// the whole point of shipping a choice is that each one is alive.
+func TestEveryBundledPetIsAnimated(t *testing.T) {
+	for _, pet := range Builtins {
+		src, err := Load(pet.Name)
+		if err != nil {
+			t.Errorf("Load(%q): %v", pet.Name, err)
+			continue
+		}
+		if len(src.Walk) < 2 {
+			t.Errorf("%s has %d frame(s), so it never moves", pet.Name, len(src.Walk))
+		}
+	}
+}
+
+// Frames that are all the same image animate in name only.
+func TestABundledPetsFramesDiffer(t *testing.T) {
+	for _, pet := range Builtins {
+		src, err := Load(pet.Name)
+		if err != nil || len(src.Walk) < 2 {
+			continue
+		}
+		first := src.Walk[0].Image
+		same := true
+		for _, f := range src.Walk[1:] {
+			if !identical(first, f.Image) {
+				same = false
+				break
+			}
+		}
+		if same {
+			t.Errorf("%s: every frame is the same picture", pet.Name)
+		}
+	}
+}
+
+func identical(a, b image.Image) bool {
+	if a.Bounds() != b.Bounds() {
+		return false
+	}
+	for y := a.Bounds().Min.Y; y < a.Bounds().Max.Y; y++ {
+		for x := a.Bounds().Min.X; x < a.Bounds().Max.X; x++ {
+			ar, ag, ab, aa := a.At(x, y).RGBA()
+			br, bg, bb, ba := b.At(x, y).RGBA()
+			if ar != br || ag != bg || ab != bb || aa != ba {
+				return false
+			}
+		}
+	}
+	return true
 }
