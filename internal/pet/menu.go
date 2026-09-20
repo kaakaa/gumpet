@@ -290,21 +290,23 @@ func (g *Game) handleDrag(mx, my float64, onPet bool, onBalloon int) (done bool,
 	draggable := !g.cfg.Stage.Fullscreen
 
 	if inpututil.IsMouseButtonJustReleased(ebiten.MouseButtonLeft) {
+		wasPress := g.drag.Pressed()
 		if wasDrag := g.drag.Release(); wasDrag {
 			g.saveDraggedStage()
 			return true, nil
 		}
-		if g.dragPressedPet {
-			g.dragPressedPet = false
+		if wasPress {
 			// A press and release that went nowhere is a click after all.
 			g.menu = g.buildMenu()
 			g.menuIdle = 0
 			return true, nil
 		}
-		g.dragPressedPet = false
 	}
 
-	if g.drag.Dragging() || g.dragActive {
+	// Driven from Pressed, not Dragging: Dragging cannot become true until
+	// Move has been called, so asking it here first is a loop that never
+	// starts — which is exactly what it did.
+	if g.drag.Pressed() {
 		st := g.stage()
 		x, y, dragging := g.drag.Move(mx, my,
 			drag.Rect{X: st.X, Y: st.Y, W: st.W, H: st.H},
@@ -326,7 +328,6 @@ func (g *Game) handleDrag(mx, my float64, onPet bool, onBalloon int) (done bool,
 		inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
 		st := g.stage()
 		g.drag.Press(mx, my, drag.Rect{X: st.X, Y: st.Y, W: st.W, H: st.H})
-		g.dragPressedPet = true
 		return true, nil
 	}
 	return false, nil
@@ -352,7 +353,6 @@ func (g *Game) saveDraggedStage() {
 // snaps back to what the settings say.
 func (g *Game) endDrag(keep bool) {
 	g.drag.Cancel()
-	g.dragPressedPet = false
 	g.dragActive = false
 	if !keep {
 		g.reshapeWalker()

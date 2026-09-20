@@ -142,10 +142,12 @@ type Game struct {
 	// stage is currently being moved by one, and dragX/dragY are where it has
 	// got to — kept here rather than written to the settings on every tick, so
 	// that a drag is one saved change rather than hundreds.
-	drag           drag.Tracker
-	dragActive     bool
-	dragX, dragY   float64
-	dragPressedPet bool
+	// Whether a gesture is in progress lives in the tracker alone: keeping a
+	// second copy here is what let the two disagree, and the drag never
+	// started.
+	drag         drag.Tracker
+	dragActive   bool
+	dragX, dragY float64
 	// reading says the cursor is being held on a balloon, which stops the
 	// countdown: a message being read should not vanish mid-sentence, and a
 	// link cannot be clicked if it disappears while being aimed at.
