@@ -79,7 +79,16 @@ func (t *Tracker) Release() (wasDrag bool) {
 	return wasDrag
 }
 
-// Dragging reports whether a drag is currently under way.
+// Pressed reports whether a gesture is in progress: the button went down on
+// something draggable and has not come up yet. It is true from the press,
+// before the cursor has moved far enough for [Tracker.Dragging] to be.
+//
+// Callers drive the gesture from this rather than from Dragging, which cannot
+// become true until Move has been called — asking Dragging first is a loop
+// that never starts.
+func (t *Tracker) Pressed() bool { return t.pressed }
+
+// Dragging reports whether the press has travelled far enough to count.
 func (t *Tracker) Dragging() bool { return t.pressed && t.dragging }
 
 // Cancel abandons the gesture without treating it as either a drag or a click.
