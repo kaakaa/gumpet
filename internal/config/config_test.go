@@ -25,6 +25,7 @@ func TestRenderRoundTrips(t *testing.T) {
 				Stage:  Stage{Display: 2, Fullscreen: true, Width: 800, Height: 600, Anchor: AnchorCustom, MarginX: 1, MarginY: 2, X: 30, Y: 40},
 				Pet:    Pet{Source: "/tmp/cat.gif", Scale: 0.75, FPS: 12.5, FlipWhenFacingRight: false, Smooth: SmoothOff},
 				Behavior: Behavior{Mode: ModeOnMessage, IdleOpacity: 0.2, Roam: RoamWander, Speed: 0, Jump: false,
+					Quiet: Quiet{From: "22:00", To: "08:30"},
 					Chatter: Chatter{Enabled: true, IntervalSec: 90.5, Source: "/tmp/my sayings.txt",
 						Feeds: []Feed{
 							{Name: "HN", URL: "https://news.ycombinator.com/rss"},
@@ -188,6 +189,12 @@ func TestValidateRejectsBadValues(t *testing.T) {
 		{"negative chatter interval", func(c *Config) { c.Behavior.Chatter.IntervalSec = -1 }},
 		{"zero fetch interval", func(c *Config) { c.Behavior.Chatter.FetchIntervalSec = 0 }},
 		{"negative max age", func(c *Config) { c.Behavior.Chatter.MaxAgeDays = -1 }},
+		// Half a quiet window would silently do nothing, which is the one
+		// thing a setting must not do.
+		{"quiet with only a start", func(c *Config) { c.Behavior.Quiet = Quiet{From: "22:00"} }},
+		{"quiet with only an end", func(c *Config) { c.Behavior.Quiet = Quiet{To: "08:30"} }},
+		{"quiet at an hour that does not exist", func(c *Config) { c.Behavior.Quiet = Quiet{From: "25:00", To: "08:30"} }},
+		{"quiet that is not a time", func(c *Config) { c.Behavior.Quiet = Quiet{From: "10pm", To: "8am"} }},
 		{"feed that is not a URL", func(c *Config) {
 			c.Behavior.Chatter.Feeds = []Feed{{URL: "news.ycombinator.com/rss"}}
 		}},
