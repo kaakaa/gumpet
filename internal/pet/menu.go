@@ -354,10 +354,17 @@ func (g *Game) handleDrag(mx, my float64, onPet bool, onBalloon int) (done bool,
 		return true, nil
 	}
 
-	if draggable && g.menu == nil && onBalloon < 0 && onPet &&
+	// Every press on the pet starts a gesture, draggable or not: the menu
+	// opens when one ends, so a press that started none could never be a
+	// click. Whether the stage can move only decides what moving does.
+	if g.menu == nil && onBalloon < 0 && onPet &&
 		inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
-		st := g.stage()
-		g.drag.Press(mx, my, drag.Rect{X: st.X, Y: st.Y, W: st.W, H: st.H})
+		if draggable {
+			st := g.stage()
+			g.drag.Press(mx, my, drag.Rect{X: st.X, Y: st.Y, W: st.W, H: st.H})
+		} else {
+			g.drag.PressFixed(mx, my)
+		}
 		return true, nil
 	}
 	return false, nil
