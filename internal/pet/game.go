@@ -64,6 +64,9 @@ type shown struct {
 	// idle marks a remark the pet made up itself. It is never recorded, never
 	// queued, and gives way the moment a real message arrives.
 	idle bool
+	// flash counts down the moment after the balloon was copied, while its
+	// border says so.
+	flash time.Duration
 }
 
 // Game is the Ebitengine game that is gumpet's pet.
@@ -405,6 +408,15 @@ func (g *Game) enqueue(msg message.Message) {
 // the queue, oldest first. Several can be up at once: a burst that arrives
 // together is shown together rather than made to queue politely.
 func (g *Game) advanceMessages(dt time.Duration) {
+	// The copy flash runs even while the stack is held: the cursor is on the
+	// balloon when it is right-clicked, so waiting for it to leave would leave
+	// the border lit for as long as someone kept reading.
+	for i := range g.showing {
+		if g.showing[i].flash > 0 {
+			g.showing[i].flash -= dt
+		}
+	}
+
 	// The whole stack is held, not just the balloon under the cursor: someone
 	// reading one of them is reading the pile, and having the others time out
 	// from under it would shuffle the stack while they read.
