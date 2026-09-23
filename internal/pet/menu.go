@@ -84,6 +84,14 @@ func (g *Game) buildMenu() *menu {
 			closes: true,
 			action: func() error { return browser.Open("http://" + cfg.Server.Addr + "/") },
 		},
+		// The messages page is where a balloon that went by too fast can be
+		// read again, and the moment to want that is while looking at the pet.
+		menuItem{
+			label:  "Messages…",
+			detail: "browser",
+			closes: true,
+			action: func() error { return browser.Open("http://" + cfg.Server.Addr + "/messages") },
+		},
 		menuItem{
 			label:  "Pet",
 			detail: petLabel(cfg.Pet.Source),
