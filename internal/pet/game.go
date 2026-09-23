@@ -28,6 +28,7 @@ import (
 	"github.com/kaakaa/gumpet/internal/layout"
 	"github.com/kaakaa/gumpet/internal/message"
 	"github.com/kaakaa/gumpet/internal/petpack"
+	"github.com/kaakaa/gumpet/internal/quiet"
 	"github.com/kaakaa/gumpet/internal/roam"
 	"github.com/kaakaa/gumpet/internal/settings"
 )
@@ -120,6 +121,10 @@ type Game struct {
 	// chatter is the pet talking to itself between messages, or nil when the
 	// setting is off.
 	chatter *chatter.Sayer
+	// hush follows the quiet window. wasQuiet is what it said last frame, so
+	// the moment quiet begins can be told from every frame after it.
+	hush     quiet.Hush
+	wasQuiet bool
 	// localSayings is what the pet says when the feeds have nothing for it:
 	// the file or the bundled list, kept so that falling back does not mean
 	// reading it off disk again.
@@ -193,6 +198,7 @@ func New(o Options) *Game {
 	g.walker = roam.New(cfg.Behavior.Roam, g.stage(), g.petWidth(), g.petHeight(), cfg.Behavior.Speed, nil)
 	g.walker.SetJumping(cfg.Behavior.Jump)
 	g.winW, g.winH = int(math.Ceil(g.petWidth())), int(math.Ceil(g.petHeight()))
+	g.setQuietWindow(cfg.Behavior.Quiet)
 	return g
 }
 
@@ -223,6 +229,7 @@ func (g *Game) Update() error {
 
 	g.drainUpdates()
 	g.ensureFonts()
+	g.advanceQuiet()
 	g.drainInbox()
 	g.advanceMessages(dt)
 	g.advanceChatter(dt)
@@ -380,6 +387,9 @@ func (g *Game) applyConfig(cfg config.Config) {
 	}
 
 	ebiten.SetWindowFloating(cfg.Window.AlwaysOnTop)
+	if cfg.Behavior.Quiet != old.Behavior.Quiet {
+		g.setQuietWindow(cfg.Behavior.Quiet)
+	}
 	g.reshapeWalker()
 	g.panelDirty = true
 	if g.menu != nil {
@@ -395,10 +405,69 @@ func (g *Game) drainInbox() {
 	for {
 		select {
 		case msg := <-g.inbox:
-			g.enqueue(msg)
+			if g.hush.Quiet() {
+				g.hold(msg)
+			} else {
+				g.enqueue(msg)
+			}
 		default:
 			return
 		}
+	}
+}
+
+// setQuietWindow adopts the configured window. The config has already been
+// validated, so a window that will not parse means the file changed under us;
+// having no quiet hours is the safe reading of that, since the alternative is
+// a pet that goes silent for no reason anyone can see.
+func (g *Game) setQuietWindow(cfg config.Quiet) {
+	w, err := quiet.Parse(cfg.From, cfg.To)
+	if err != nil {
+		g.log.Error("ignoring the quiet window", "error", err)
+		w = quiet.Window{}
+	}
+	g.hush.SetWindow(w)
+}
+
+// advanceQuiet asks whether it is quiet now, and deals with the two moments
+// that matter: quiet beginning, and quiet ending with messages held.
+//
+// Held messages are not queued for later. They are already on the messages
+// page, which is where they are meant to be read; queueing them would either
+// overflow message.max_queue the moment quiet ended or change what the queue
+// is for. The pet says once how many there were, and where.
+func (g *Game) advanceQuiet() {
+	hushed, ended := g.hush.Update(time.Now())
+	if hushed && !g.wasQuiet {
+		// Anything still waiting its turn when quiet begins is held with the
+		// rest. Only then, not every frame: the menu's own test message goes
+		// straight into the queue, and someone who asks the pet to say
+		// something during quiet hours means it.
+		for _, msg := range g.queue {
+			g.hold(msg)
+		}
+		g.queue = g.queue[:0]
+		g.log.Info("quiet hours begin")
+	}
+	g.wasQuiet = hushed
+
+	if ended > 0 {
+		g.log.Info("quiet hours end", "held", ended)
+		g.enqueue(message.Message{
+			Title: "While it was quiet",
+			Text:  quiet.Summary(ended, "http://"+g.cfg.Server.Addr+"/messages"),
+			Level: message.LevelInfo,
+			At:    time.Now(),
+		})
+	}
+}
+
+// hold keeps a message back during quiet hours: counted for the summary, and
+// marked on the messages page so it does not look like it is still waiting.
+func (g *Game) hold(msg message.Message) {
+	g.hush.Hold()
+	if g.history != nil && msg.ID != "" {
+		g.history.MarkHeld(msg.ID)
 	}
 }
 
@@ -486,8 +555,10 @@ func (g *Game) advanceChatter(dt time.Duration) {
 
 	// Anything else on screen or waiting means the pet has better to do. So
 	// does an open menu: interrupting someone reading it would be rude.
-	quiet := len(g.showing) == 0 && len(g.queue) == 0 && g.menu == nil
-	remark, ok := g.chatter.Tick(dt, quiet)
+	// Quiet hours silence the pet's own remarks too: a pet that keeps the
+	// messages to itself and then talks anyway is not being quiet.
+	idle := len(g.showing) == 0 && len(g.queue) == 0 && g.menu == nil && !g.hush.Quiet()
+	remark, ok := g.chatter.Tick(dt, idle)
 	if !ok {
 		return
 	}

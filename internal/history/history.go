@@ -31,6 +31,10 @@ type Record struct {
 	// ShownAt is when the pet put it on screen, or the zero time if it is
 	// still waiting its turn.
 	ShownAt time.Time `json:"shown_at,omitzero"`
+	// Held is set for a message that arrived during quiet hours. It was
+	// received and kept, and was never going to be said; without this it
+	// would sit on the page as "waiting" for good.
+	Held bool `json:"held,omitempty"`
 	// Link is the article a headline points at. Only remarks have one.
 	Link string `json:"link,omitempty"`
 	// Published is when the feed says the article appeared, or the zero time
@@ -123,6 +127,20 @@ func (s *Store) AddRemark(r chatter.Remark) Record {
 	s.records = append(s.records, rec)
 	s.prune()
 	return rec
+}
+
+// MarkHeld notes that a message arrived while the pet was keeping quiet, and
+// will be read here rather than said.
+func (s *Store) MarkHeld(id string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for i := range s.records {
+		if s.records[i].ID == id {
+			s.records[i].Held = true
+			return
+		}
+	}
 }
 
 // MarkShown notes that the pet has put a message on screen. A message that has

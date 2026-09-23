@@ -276,3 +276,17 @@ func TestRemarksNeverPushMessagesOut(t *testing.T) {
 		t.Errorf("newest remark = %q, want headline 99", got)
 	}
 }
+
+// A message held during quiet hours is recorded as such, so the page does not
+// show it waiting for a turn that is never coming.
+func TestMarkHeld(t *testing.T) {
+	s, _ := newStore(t, config.History{Max: 10})
+	rec := s.Add(message.Message{Text: "while it was quiet"})
+	s.MarkHeld(rec.ID)
+	s.MarkHeld("nonexistent") // quietly ignored, as MarkShown does
+
+	got := s.List()[0]
+	if !got.Held || got.Shown() {
+		t.Errorf("held=%v shown=%v, want held and never shown", got.Held, got.Shown())
+	}
+}

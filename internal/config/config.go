@@ -11,6 +11,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/kaakaa/gumpet/internal/feed"
+	"github.com/kaakaa/gumpet/internal/quiet"
 )
 
 // Anchor is the corner of the monitor the stage window is pinned to.
@@ -212,6 +213,18 @@ type Behavior struct {
 	Jump bool `yaml:"jump" json:"jump"`
 	// Chatter is the pet talking to itself when nobody has sent it anything.
 	Chatter Chatter `yaml:"chatter" json:"chatter"`
+	// Quiet is a time of day when the pet says nothing.
+	Quiet Quiet `yaml:"quiet" json:"quiet"`
+}
+
+// Quiet is a stretch of each day, in local time, when messages are received
+// and recorded as usual but not said. When it ends, the pet says once how
+// many arrived. Both empty, which is the default, means never.
+type Quiet struct {
+	// From and To are "HH:MM". To may be earlier than From, which is how a
+	// window crosses midnight: 22:00 to 08:30 is the night.
+	From string `yaml:"from" json:"from"`
+	To   string `yaml:"to" json:"to"`
 }
 
 // Chatter is what the pet says of its own accord between messages.
@@ -360,6 +373,9 @@ func Default() Config {
 			Roam:        RoamHorizontal,
 			Speed:       45,
 			Jump:        true,
+			// No quiet window: a pet that goes silent without being asked
+			// would look broken.
+			Quiet: Quiet{From: "", To: ""},
 			Chatter: Chatter{
 				Enabled:     false,
 				IntervalSec: 600,
@@ -441,6 +457,9 @@ func (c Config) Validate() error {
 	}
 	if !validRoam(c.Behavior.Roam) {
 		return fmt.Errorf("behavior.roam %q is not one of none, horizontal, perimeter, wander", c.Behavior.Roam)
+	}
+	if _, err := quiet.Parse(c.Behavior.Quiet.From, c.Behavior.Quiet.To); err != nil {
+		return fmt.Errorf("behavior.quiet: %w", err)
 	}
 	if c.Behavior.Speed < 0 {
 		return fmt.Errorf("behavior.speed must not be negative, got %v", c.Behavior.Speed)

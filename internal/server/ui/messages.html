@@ -198,6 +198,9 @@
   }
   .badge.shown { background: var(--shown-bg); color: var(--shown-ink); }
   .badge.waiting { background: var(--waiting-bg); color: var(--waiting-ink); }
+  /* Held during quiet hours: received and kept, and deliberately not said.
+     Grey, because nothing is wrong and nothing is pending. */
+  .badge.held { background: var(--line); color: var(--muted); }
 
   /* A message's level is shown as a stripe down its left edge rather than
      another badge: the badges already say whether the pet has said it, and two
@@ -414,9 +417,10 @@
       } else {
         // A remark is on screen the moment it is said, so "waiting" would
         // never apply and "shown" would say nothing.
+        var state = msg.shown_at ? "shown" : (msg.held ? "held" : "waiting");
         var badge = document.createElement("span");
-        badge.className = "badge " + (msg.shown_at ? "shown" : "waiting");
-        badge.textContent = msg.shown_at ? "shown" : "waiting";
+        badge.className = "badge " + state;
+        badge.textContent = state;
         li.appendChild(badge);
       }
 
@@ -428,7 +432,9 @@
       } else {
         when.textContent = msg.shown_at
           ? "received " + ago(msg.queued_at) + ", shown " + ago(msg.shown_at)
-          : "received " + ago(msg.queued_at);
+          : msg.held
+            ? "received " + ago(msg.queued_at) + ", during quiet hours"
+            : "received " + ago(msg.queued_at);
       }
       li.appendChild(when);
 
