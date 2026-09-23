@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kaakaa/gumpet/internal/chatter"
 	"github.com/kaakaa/gumpet/internal/config"
 	"github.com/kaakaa/gumpet/internal/display"
 	"github.com/kaakaa/gumpet/internal/history"
@@ -493,6 +494,71 @@ func TestSavingHistoryLimitsPrunesStraightAway(t *testing.T) {
 	}
 	if got := hist.Len(); got != 2 {
 		t.Errorf("kept %d messages, want the new limit of 2", got)
+	}
+}
+
+// What the pet says of its own accord is listed apart from what was sent, so
+// a client that reads "messages" still reads exactly what arrived.
+func TestRemarksAreListedApartFromMessages(t *testing.T) {
+	out := make(chan message.Message, 4)
+	cfg := config.Default()
+	store := settings.New(cfg, filepath.Join(t.TempDir(), "config.yaml"))
+	remarks := history.NewRemarks(cfg.History)
+	s := New(store, history.New(cfg.History), testMonitors, out, slog.New(slog.DiscardHandler))
+	s.SetRemarks(remarks)
+
+	post(t, s, "text/plain", "sent by someone", nil)
+	remarks.AddRemark(chatter.Remark{Text: "Go 2 is out", Title: "Go Blog", Link: "https://go.dev/blog/go2"})
+
+	rec := do(t, s, http.MethodGet, "/api/v1/messages", "", "", nil)
+	var body struct {
+		Messages []history.Record `json:"messages"`
+		Remarks  []history.Record `json:"remarks"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(body.Messages) != 1 || body.Messages[0].Text != "sent by someone" {
+		t.Errorf("messages = %+v, want only what was sent", body.Messages)
+	}
+	if len(body.Remarks) != 1 || body.Remarks[0].Link != "https://go.dev/blog/go2" {
+		t.Errorf("remarks = %+v, want the headline with its link", body.Remarks)
+	}
+}
+
+// A server that was never given a record of remarks still answers with an
+// empty list rather than null, so the page has one shape to deal with.
+func TestRemarksAreAnEmptyListWhenNotRecorded(t *testing.T) {
+	s, _ := newTestServer(t, config.Server{Addr: "127.0.0.1:0"}, 1)
+
+	rec := do(t, s, http.MethodGet, "/api/v1/messages", "", "", nil)
+	var body map[string]json.RawMessage
+	if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if got := string(body["remarks"]); got != "[]" {
+		t.Errorf("remarks = %s, want []", got)
+	}
+}
+
+// The history limits cover both records, each counted on its own.
+func TestSavingHistoryLimitsPrunesRemarksToo(t *testing.T) {
+	out := make(chan message.Message, 8)
+	cfg := config.Default()
+	store := settings.New(cfg, filepath.Join(t.TempDir(), "config.yaml"))
+	remarks := history.NewRemarks(cfg.History)
+	s := New(store, history.New(cfg.History), testMonitors, out, slog.New(slog.DiscardHandler))
+	s.SetRemarks(remarks)
+
+	for range 5 {
+		remarks.AddRemark(chatter.Remark{Text: "headline"})
+	}
+	rec := do(t, s, http.MethodPut, "/api/v1/config", "application/json", `{"history":{"max":2}}`, nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d (%s)", rec.Code, http.StatusOK, rec.Body)
+	}
+	if got := remarks.Len(); got != 2 {
+		t.Errorf("kept %d remarks, want the new limit of 2", got)
 	}
 }
 

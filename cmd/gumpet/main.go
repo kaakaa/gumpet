@@ -83,9 +83,11 @@ func run() error {
 
 	store := settings.New(cfg, *configPath)
 	hist := history.New(cfg.History)
+	remarks := history.NewRemarks(cfg.History)
 	inbox := make(chan message.Message, inboxSize)
 	monitors := pet.Monitors()
 	srv := server.New(store, hist, monitors, inbox, log)
+	srv.SetRemarks(remarks)
 
 	// Claim the port before opening a window. gumpet exists to be sent
 	// messages, so one that cannot listen has nothing to offer: starting
@@ -117,6 +119,7 @@ func run() error {
 		Pack:    pack,
 		Inbox:   inbox,
 		History: hist,
+		Remarks: remarks,
 		Quit:    ctx.Done(),
 		Log:     log,
 		Version: version,
