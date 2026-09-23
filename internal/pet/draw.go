@@ -34,6 +34,10 @@ const (
 	stampTextScale = 0.7
 	// stampGap keeps the timestamp clear of a heading sharing its line.
 	stampGap = 10.0
+	// copyFlash is how long a copied balloon's border stays lit. Long enough
+	// to catch from the corner of an eye, short enough not to look like a
+	// change of level.
+	copyFlash = 700 * time.Millisecond
 	// underlineDrop is how far below the baseline box a link's underline sits.
 	underlineDrop = 1.0
 )
@@ -50,6 +54,8 @@ var (
 	// stampColor is fainter than mutedColor, and stays the same whatever the
 	// level: when a message arrived says nothing about how loud it is.
 	stampColor = color.NRGBA{R: 0x70, G: 0x70, B: 0x70, A: 0xaa}
+	// copiedColor is the gopher's own blue, which no level uses.
+	copiedColor = color.NRGBA{R: 0x00, G: 0xad, B: 0xd8, A: 0xff}
 )
 
 // levelColors give each level a border for its balloon and a colour for its
@@ -266,7 +272,11 @@ func (g *Game) drawBalloons(screen *ebiten.Image) {
 				float32(balloonRadius*ds),
 			)
 		}
-		fillAndStroke(screen, path, ds, b.border)
+		border := b.border
+		if g.showing[i].flash > 0 {
+			border = copiedColor
+		}
+		fillAndStroke(screen, path, ds, border)
 
 		if len(b.title) > 0 {
 			g.drawRichText(screen, b.title, (x+balloonPadding)*ds, (y+balloonPadding)*ds,

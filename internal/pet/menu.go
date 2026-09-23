@@ -8,6 +8,7 @@ import (
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
 
 	"github.com/kaakaa/gumpet/internal/browser"
+	"github.com/kaakaa/gumpet/internal/clipboard"
 	"github.com/kaakaa/gumpet/internal/config"
 	"github.com/kaakaa/gumpet/internal/drag"
 	"github.com/kaakaa/gumpet/internal/message"
@@ -259,6 +260,14 @@ func (g *Game) handleInput(dt time.Duration) error {
 		}
 		g.menu.hover = g.menu.itemAt(g.win.PanelX, g.win.PanelY, px, py)
 	}
+	// A right-click copies the balloon under it, leaving the left button to do
+	// what it always has. A balloon is up for seconds, and what it says is
+	// often something to use rather than read: a path, an error, a question
+	// to paste an answer to.
+	if onBalloon >= 0 && inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonRight) {
+		g.copyBalloon(onBalloon)
+		return nil
+	}
 	if !inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
 		return nil
 	}
@@ -448,6 +457,22 @@ func (g *Game) linkAt(i int, px, py float64) string {
 		}
 	}
 	return ""
+}
+
+// copyBalloon puts balloon i on the clipboard, and lights its border if that
+// worked. It does not take the balloon down: copying is for using what it
+// says, and the text should still be there to check against.
+//
+// The copy runs here rather than in the background because every clipboard
+// command reads its input and returns at once, and doing it in line is what
+// lets the flash mean it actually worked. [clipboard.Timeout] covers the case
+// where it does not return.
+func (g *Game) copyBalloon(i int) {
+	if err := clipboard.Write(g.showing[i].msg.Copied()); err != nil {
+		g.log.Warn("could not copy a message", "error", err)
+		return
+	}
+	g.showing[i].flash = copyFlash
 }
 
 // openLink hands a URL to the browser, if the settings allow it and the URL is

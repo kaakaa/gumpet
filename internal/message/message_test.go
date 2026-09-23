@@ -66,3 +66,23 @@ func TestStampSaysNothingAboutTheZeroTime(t *testing.T) {
 		t.Errorf("Stamp of the zero time = %q, want empty", got)
 	}
 }
+
+// What is copied is what was sent, not what was drawn: a balloon wraps a long
+// path across lines, and pasting it back must not break it.
+func TestCopiedIsTheMessageAsSent(t *testing.T) {
+	cases := []struct {
+		name string
+		msg  Message
+		want string
+	}{
+		{"plain", Message{Text: "/tmp/some/very/long/path/that/wraps.log"}, "/tmp/some/very/long/path/that/wraps.log"},
+		{"the sender's own line breaks survive", Message{Text: "one\ntwo"}, "one\ntwo"},
+		{"heading first", Message{Title: "CI", Text: "build failed"}, "CI\nbuild failed"},
+		{"a headline with its link", Message{Title: "Go Blog", Text: "Generics\nhttps://go.dev/blog/x"}, "Go Blog\nGenerics\nhttps://go.dev/blog/x"},
+	}
+	for _, c := range cases {
+		if got := c.msg.Copied(); got != c.want {
+			t.Errorf("%s: Copied = %q, want %q", c.name, got, c.want)
+		}
+	}
+}
