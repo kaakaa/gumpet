@@ -401,8 +401,3 @@ func (f *Fetcher) FetchAll(ctx context.Context, sources []Source, maxAge time.Du
 	}
 	return out
 }
-
-// Text renders one item the way the pet says it: the headline, then the URL on
-// its own line. The URL is left as plain text because gumpet already spots one
-// and draws it as a link — there is nothing for this package to mark up.
-func (i Item) Text() string { return i.Title + "\n" + i.Link }

@@ -1,9 +1,11 @@
 package history
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
+	"github.com/kaakaa/gumpet/internal/chatter"
 	"github.com/kaakaa/gumpet/internal/config"
 	"github.com/kaakaa/gumpet/internal/message"
 )
@@ -216,5 +218,61 @@ func TestAddKeepsTheTitleAndLevel(t *testing.T) {
 	}
 	if listed[0].Title != "CI" || listed[0].Level != message.LevelError {
 		t.Errorf("listed title %q level %q, want CI/error", listed[0].Title, listed[0].Level)
+	}
+}
+
+// A remark goes straight on screen, so it is never "waiting"; and a headline
+// keeps its link and date apart, which is what the page offers as a link.
+func TestAddRemarkKeepsTheLinkAndDate(t *testing.T) {
+	c := &clock{t: time.Date(2026, 9, 7, 12, 0, 0, 0, time.UTC)}
+	s := NewRemarks(config.History{Max: 10})
+	s.now = c.now
+
+	published := time.Date(2026, 9, 6, 8, 0, 0, 0, time.UTC)
+	rec := s.AddRemark(chatter.Remark{
+		Text: "Go 2 is out", Title: "Go Blog",
+		Link: "https://go.dev/blog/go2", At: published,
+	})
+
+	if rec.Text != "Go 2 is out" || rec.Title != "Go Blog" {
+		t.Errorf("recorded %q under %q, want the headline under the feed's name", rec.Text, rec.Title)
+	}
+	if rec.Link != "https://go.dev/blog/go2" {
+		t.Errorf("link = %q, want the article", rec.Link)
+	}
+	if !rec.Published.Equal(published) {
+		t.Errorf("published = %v, want %v", rec.Published, published)
+	}
+	if !rec.Shown() || !rec.ShownAt.Equal(c.t) {
+		t.Errorf("shown at %v, want %v: a remark is on screen as soon as it is said", rec.ShownAt, c.t)
+	}
+	if rec.ID != "r1" {
+		t.Errorf("id = %q, want r1: remark IDs must not collide with message IDs", rec.ID)
+	}
+}
+
+// The whole point of keeping remarks in a store of their own: a pet reading
+// out a hundred headlines must not age a single sent message out of the
+// record, however small the limit.
+func TestRemarksNeverPushMessagesOut(t *testing.T) {
+	limits := config.History{Max: 5}
+	messages := New(limits)
+	remarks := NewRemarks(limits)
+
+	for i := range 3 {
+		messages.Add(message.Message{Text: fmt.Sprintf("sent %d", i)})
+	}
+	for i := range 100 {
+		remarks.AddRemark(chatter.Remark{Text: fmt.Sprintf("headline %d", i)})
+	}
+
+	if got := messages.Len(); got != 3 {
+		t.Errorf("%d messages kept after 100 remarks, want all 3", got)
+	}
+	if got := remarks.Len(); got != 5 {
+		t.Errorf("%d remarks kept, want the limit of 5", got)
+	}
+	if got := remarks.List()[0].Text; got != "headline 99" {
+		t.Errorf("newest remark = %q, want headline 99", got)
 	}
 }

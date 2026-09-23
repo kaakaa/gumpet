@@ -306,3 +306,19 @@ func TestSetGroupsIgnoresNothingAtAll(t *testing.T) {
 		}
 	}
 }
+
+func TestSaidPutsTheLinkOnALineOfItsOwn(t *testing.T) {
+	cases := []struct {
+		name string
+		r    Remark
+		want string
+	}{
+		{"a saying", Remark{Text: "hello"}, "hello"},
+		{"a headline", Remark{Text: "Go 2 is out", Link: "https://go.dev/blog/go2"}, "Go 2 is out\nhttps://go.dev/blog/go2"},
+	}
+	for _, c := range cases {
+		if got := c.r.Said(); got != c.want {
+			t.Errorf("%s: Said = %q, want %q", c.name, got, c.want)
+		}
+	}
+}

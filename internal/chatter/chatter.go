@@ -33,6 +33,20 @@ type Remark struct {
 	// At is when the feed says the entry appeared. Zero for a saying out of a
 	// file, and for a feed that dated nothing — plenty do not.
 	At time.Time
+	// Link is the article a headline points at, empty for a saying. It is kept
+	// apart from Text so that the record of what the pet said can offer it as
+	// a link, rather than digging it back out of a sentence.
+	Link string
+}
+
+// Said is the remark the way the pet says it: the headline, then the URL on a
+// line of its own. The URL is left as plain text because the balloon already
+// spots one and draws it as a link.
+func (r Remark) Said() string {
+	if r.Link == "" {
+		return r.Text
+	}
+	return r.Text + "\n" + r.Link
 }
 
 // Bundled is the list gumpet ships with, used when no file is configured or
