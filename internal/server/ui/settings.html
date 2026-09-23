@@ -110,7 +110,7 @@
     line-height: 1.5;
   }
 
-  input[type=text], input[type=number], select, textarea {
+  input[type=text], input[type=number], input[type=time], select, textarea {
     width: 100%;
     max-width: 340px;
     padding: 7px 9px;
@@ -120,7 +120,7 @@
     color: var(--ink);
     font: inherit;
   }
-  input[type=number] { max-width: 140px; }
+  input[type=number], input[type=time] { max-width: 140px; }
   input:focus-visible, select:focus-visible, button:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 1px;
@@ -420,6 +420,21 @@
         <input type="number" id="chatter-fetch" data-path="behavior.chatter.fetch_interval_sec" data-kind="float" min="1" step="60">
         <p class="hint" data-i18n>Seconds between fetches. No reason to fetch once per remark.</p>
       </div>
+      <div class="row">
+        <label for="quiet-from" data-i18n>Quiet hours</label>
+        <div>
+          <input type="time" id="quiet-from" data-path="behavior.quiet.from">
+          –
+          <input type="time" data-path="behavior.quiet.to">
+        </div>
+        <p class="hint" data-i18n>
+          Messages that arrive between these times are kept on the
+          <a href="/messages">messages page</a> but not said, and the pet keeps
+          its own remarks to itself. When the quiet ends it says once how many
+          came in. An end earlier than the start runs overnight. Leave both
+          empty to never be quiet.
+        </p>
+      </div>
     </section>
 
     <section>
@@ -648,6 +663,8 @@
       "Days. A podcast's whole archive is a perfectly good feed, and without this the pet mostly reads out episodes from years ago. 0 keeps everything. Items a feed did not date are always kept.": "日数。ポッドキャストの全アーカイブも立派なフィードで、これが無いとペットは何年も前の回ばかり読み上げます。0 ならすべて残ります。日付の無い項目は常に残ります。",
       "Re-read the feeds": "フィードの読み直し",
       "Seconds between fetches. No reason to fetch once per remark.": "取得と取得の間の秒数。独り言1回ごとに取りに行く理由はありません。",
+      "Quiet hours": "静かにする時間",
+      "Messages that arrive between these times are kept on the <a href=\"/messages\">messages page</a> but not said, and the pet keeps its own remarks to itself. When the quiet ends it says once how many came in. An end earlier than the start runs overnight. Leave both empty to never be quiet.": "この時間帯に届いたメッセージは<a href=\"/messages\">メッセージのページ</a>には残りますが、ペットは口にしません。独り言も言いません。静かな時間が明けたら、何件届いたかを一度だけ言います。終わりを始まりより早くすると、夜をまたぎます。両方空なら静かにはなりません。",
 
       "Messages": "メッセージ",
       "Time on screen": "表示時間",

@@ -99,6 +99,13 @@ behavior:
   # Hop now and then while on the floor. Only applies to the styles of roaming
   # that have a floor: "none" and "horizontal".
   jump: {{ .Behavior.Jump }}
+  # A time of day when the pet says nothing. Messages still arrive and are kept
+  # on the messages page; the pet just does not say them, or anything of its
+  # own. When the quiet ends it says once how many came in. "HH:MM", local
+  # time; "to" earlier than "from" crosses midnight. Both empty means never.
+  quiet:
+    from: {{ q .Behavior.Quiet.From }}
+    to: {{ q .Behavior.Quiet.To }}
   # Between messages the pet can talk to itself, so that it is doing something
   # even when nothing has arrived. Off unless you ask for it.
   chatter:
