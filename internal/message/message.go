@@ -65,6 +65,19 @@ type Message struct {
 	At time.Time
 }
 
+// Copied is what the balloon puts on the clipboard: the heading, if there is
+// one, then the text exactly as it was sent.
+//
+// It is built from the message rather than from what was drawn. The balloon's
+// lines were broken to fit its width, and a path or an error message pasted
+// back with those breaks in it is broken in a way nobody asked for.
+func (m Message) Copied() string {
+	if m.Title == "" {
+		return m.Text
+	}
+	return m.Title + "\n" + m.Text
+}
+
 // Stamp renders [Message.At] for the small line the balloon puts beside its
 // heading. now is passed in rather than read so that the result can be tested.
 //
