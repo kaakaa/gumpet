@@ -39,6 +39,8 @@ type Server struct {
 	store *settings.Store
 	// history records every message, and whether the pet has said it yet.
 	history *history.Store
+	// remarks records what the pet said of its own accord. It may be nil.
+	remarks *history.Store
 	// monitors is what the machine reported at startup, so the settings page
 	// can name the displays rather than asking for a number on faith.
 	monitors []display.Monitor
@@ -96,6 +98,10 @@ func New(store *settings.Store, hist *history.Store, monitors []display.Monitor,
 	}
 	return s
 }
+
+// SetRemarks gives the messages page the record of what the pet has said of
+// its own accord. Without it the page shows that list as empty.
+func (s *Server) SetRemarks(remarks *history.Store) { s.remarks = remarks }
 
 // Listen claims the address. It is separate from [Server.Serve] so that a port
 // that cannot be had is a startup failure, reported before anything else
@@ -163,8 +169,18 @@ func (s *Server) handleListMessages(w http.ResponseWriter, r *http.Request) {
 	if records == nil {
 		records = []history.Record{}
 	}
+	// Remarks are a list of their own rather than records mixed in with the
+	// messages: a client written before they existed still reads "messages"
+	// as exactly what was sent.
+	remarks := []history.Record{}
+	if s.remarks != nil {
+		if list := s.remarks.List(); list != nil {
+			remarks = list
+		}
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"messages": records,
+		"remarks":  remarks,
 		"history":  s.config().History,
 	})
 }
@@ -228,6 +244,9 @@ func (s *Server) handlePutConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.history.SetLimits(cfg.History)
+	if s.remarks != nil {
+		s.remarks.SetLimits(cfg.History)
+	}
 	s.log.Info("saved settings", "path", s.store.Path())
 
 	writeJSON(w, http.StatusOK, map[string]any{"config": cfg, "path": s.store.Path()})

@@ -63,6 +63,29 @@
 
   .summary { color: var(--muted); font-size: 13px; margin: 0 0 16px; }
 
+  /* Two lists, one page: what was sent, and what the pet said of its own
+     accord. Tabs rather than one mixed list, because the second is mostly
+     headlines and would bury the first. */
+  .tabs { display: flex; gap: 20px; border-bottom: 1px solid var(--line); margin: 0 0 14px; }
+  .tabs button {
+    background: none;
+    color: var(--muted);
+    border: 0;
+    border-bottom: 2px solid transparent;
+    border-radius: 0;
+    padding: 6px 0;
+    margin-bottom: -1px;
+    font-weight: 600;
+  }
+  .tabs button[aria-selected=true] { color: var(--ink); border-bottom-color: var(--accent); }
+
+  .link {
+    grid-column: 1;
+    font-size: 13px;
+    overflow-wrap: anywhere;
+    color: var(--accent);
+  }
+
   .filters {
     display: flex;
     gap: 8px;
@@ -150,6 +173,9 @@
     align-items: start;
   }
   .text {
+    /* Pinned, not left to flow: a remark has no badge, and without one the
+       text would drift into the badge's column. */
+    grid-column: 1;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
     margin: 0;
@@ -209,10 +235,14 @@
     <h1>gumpet <span>messages</span></h1>
     <nav><a href="/">Settings &rarr;</a></nav>
   </header>
+  <div class="tabs" role="tablist">
+    <button type="button" role="tab" id="tab-messages" aria-selected="true">Received</button>
+    <button type="button" role="tab" id="tab-remarks" aria-selected="false">Said by the pet</button>
+  </div>
   <p class="summary" id="summary">Loading&hellip;</p>
 
   <div class="filters" id="filters" hidden>
-    <input type="search" id="search" placeholder="Search messages" autocomplete="off" spellcheck="false">
+    <input type="search" id="search" placeholder="Search" autocomplete="off" spellcheck="false">
     <select id="range">
       <option value="0">Any time</option>
       <option value="600">Last 10 minutes</option>
@@ -251,6 +281,9 @@
   // The last thing the server told us, kept so that typing in the search box
   // filters what is already here rather than waiting on a round trip.
   var latest = null;
+  // Which list is showing. It lives in the address as #said so that the list
+  // of remarks can be linked to and survives a reload.
+  var view = location.hash === "#said" ? "remarks" : "messages";
 
   function request(url) {
     var headers = {};
@@ -294,7 +327,8 @@
       // The title is part of the message as far as anyone reading the page is
       // concerned, so searching for "CI" should find the ones labelled CI.
       return msg.text.toLowerCase().indexOf(query) >= 0 ||
-        (msg.title || "").toLowerCase().indexOf(query) >= 0;
+        (msg.title || "").toLowerCase().indexOf(query) >= 0 ||
+        (msg.link || "").toLowerCase().indexOf(query) >= 0;
     });
   }
 
@@ -320,9 +354,30 @@
     el.appendChild(document.createTextNode(text.slice(from)));
   }
 
+  // linkTo is a feed's link, if it is one this page is prepared to offer. A
+  // feed is somebody else's XML: a javascript: URL in one must not become
+  // something to click.
+  function linkTo(url) {
+    if (!/^https?:\/\//i.test(url || "")) { return null; }
+    var a = document.createElement("a");
+    a.className = "link";
+    a.href = url;
+    a.target = "_blank";
+    a.rel = "noopener noreferrer";
+    a.textContent = url;
+    return a;
+  }
+
+  function showTabs() {
+    $("tab-messages").setAttribute("aria-selected", String(view === "messages"));
+    $("tab-remarks").setAttribute("aria-selected", String(view === "remarks"));
+  }
+
   function render() {
+    showTabs();
     if (latest === null) { return; }
-    var all = latest.messages || [];
+    var remarks = view === "remarks";
+    var all = latest[view] || [];
     var messages = matching(all);
     var query = $("search").value.trim().toLowerCase();
 
@@ -351,16 +406,30 @@
       fillHighlighted(text, msg.text, query);
       li.appendChild(text);
 
-      var badge = document.createElement("span");
-      badge.className = "badge " + (msg.shown_at ? "shown" : "waiting");
-      badge.textContent = msg.shown_at ? "shown" : "waiting";
-      li.appendChild(badge);
+      if (remarks) {
+        // The article is what a headline was for, and the balloon it came in
+        // was gone in seconds.
+        var link = linkTo(msg.link);
+        if (link) { li.appendChild(link); }
+      } else {
+        // A remark is on screen the moment it is said, so "waiting" would
+        // never apply and "shown" would say nothing.
+        var badge = document.createElement("span");
+        badge.className = "badge " + (msg.shown_at ? "shown" : "waiting");
+        badge.textContent = msg.shown_at ? "shown" : "waiting";
+        li.appendChild(badge);
+      }
 
       var when = document.createElement("span");
       when.className = "when";
-      when.textContent = msg.shown_at
-        ? "received " + ago(msg.queued_at) + ", shown " + ago(msg.shown_at)
-        : "received " + ago(msg.queued_at);
+      if (remarks) {
+        when.textContent = "said " + ago(msg.shown_at) +
+          (msg.published ? ", published " + new Date(msg.published).toLocaleString() : "");
+      } else {
+        when.textContent = msg.shown_at
+          ? "received " + ago(msg.queued_at) + ", shown " + ago(msg.shown_at)
+          : "received " + ago(msg.queued_at);
+      }
       li.appendChild(when);
 
       list.appendChild(li);
@@ -370,13 +439,17 @@
     $("empty").hidden = messages.length > 0;
     $("empty").textContent = filtered
       ? "Nothing matches."
-      : "Nothing yet. Send something with gumpetctl hello.";
+      : remarks
+        ? "Nothing yet. With \u201cTalk to itself\u201d on in the settings, what the pet says between messages is kept here."
+        : "Nothing yet. Send something with gumpetctl hello.";
     $("filters").hidden = all.length === 0 && !filtered;
 
     var limits = latest.history || {};
+    var one = remarks ? " remark" : " message";
+    var many = remarks ? " remarks" : " messages";
     var counted = filtered
-      ? messages.length + " of " + all.length + " messages"
-      : all.length + (all.length === 1 ? " message" : " messages");
+      ? messages.length + " of " + all.length + many
+      : all.length + (all.length === 1 ? one : many);
 
     var parts = [counted];
     if (limits.max) { parts.push("keeping up to " + limits.max); }
@@ -435,6 +508,14 @@
   // typing and the refresh below never disturbs what is in the box.
   $("search").addEventListener("input", render);
   $("range").addEventListener("change", render);
+
+  function choose(which) {
+    view = which;
+    history.replaceState(null, "", which === "remarks" ? "#said" : location.pathname);
+    render();
+  }
+  $("tab-messages").addEventListener("click", function () { choose("messages"); });
+  $("tab-remarks").addEventListener("click", function () { choose("remarks"); });
 
   load();
 })();

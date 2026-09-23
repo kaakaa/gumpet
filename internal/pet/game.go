@@ -46,6 +46,9 @@ type Options struct {
 	// History is told when a message actually reaches the screen. It may be
 	// nil, in which case nothing is recorded.
 	History *history.Store
+	// Remarks records what the pet says of its own accord, apart from
+	// History. It may be nil, in which case nothing is recorded.
+	Remarks *history.Store
 	// Quit ends the game loop when it is closed.
 	Quit    <-chan struct{}
 	Log     *slog.Logger
@@ -78,6 +81,7 @@ type Game struct {
 	fonts   fonts
 	inbox   <-chan message.Message
 	history *history.Store
+	remarks *history.Store
 	quit    <-chan struct{}
 	log     *slog.Logger
 	version string
@@ -173,6 +177,7 @@ func New(o Options) *Game {
 		pack:    o.Pack,
 		inbox:   o.Inbox,
 		history: o.History,
+		remarks: o.Remarks,
 		quit:    o.Quit,
 		log:     o.Log,
 		version: o.Version,
@@ -470,9 +475,9 @@ func (g *Game) advanceMessages(dt time.Duration) {
 //
 // A remark is put straight on screen rather than into the queue: the queue is
 // for messages somebody sent, and a remark must not take a place in it or push
-// a real message out of one. For the same reason it is never recorded — the
-// messages page is a log of what arrived, and filling it with the pet talking
-// to itself would age real messages out of the record.
+// a real message out of one. For the same reason it is recorded apart from
+// them, in a store with its own limit: a pet reading out headlines says a
+// great deal, and sharing one record would age real messages out of it.
 func (g *Game) advanceChatter(dt time.Duration) {
 	g.ensureChatter()
 	if g.chatter == nil {
@@ -492,7 +497,7 @@ func (g *Game) advanceChatter(dt time.Duration) {
 		// mixed together can still be told apart at a glance. A saying out of
 		// a file has none, and the balloon simply gets no heading.
 		msg: message.Message{
-			Text:  remark.Text,
+			Text:  remark.Said(),
 			Title: remark.Title,
 			Level: message.LevelInfo,
 			At:    remark.At,
@@ -502,6 +507,12 @@ func (g *Game) advanceChatter(dt time.Duration) {
 	})
 	g.panelDirty = true
 	g.resetAnimation()
+
+	// A balloon goes by in seconds, and a headline is often the one thing on
+	// screen worth following up — usually noticed just as it goes.
+	if g.remarks != nil {
+		g.remarks.AddRemark(remark)
+	}
 }
 
 // ensureChatter builds the Sayer when the settings behind it change, and drops
@@ -599,7 +610,7 @@ func fetchAll(feeds []config.Feed, maxAge time.Duration, log *slog.Logger) [][]c
 			// Published is carried rather than written into the text: the
 			// balloon draws it small and off to the side, and a date in the
 			// middle of a headline would be read as part of it.
-			remarks = append(remarks, chatter.Remark{Text: it.Text(), Title: g.Name, At: it.Published})
+			remarks = append(remarks, chatter.Remark{Text: it.Title, Title: g.Name, At: it.Published, Link: it.Link})
 		}
 		groups = append(groups, remarks)
 	}

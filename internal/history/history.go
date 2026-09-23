@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/kaakaa/gumpet/internal/chatter"
 	"github.com/kaakaa/gumpet/internal/config"
 	"github.com/kaakaa/gumpet/internal/message"
 )
@@ -30,6 +31,11 @@ type Record struct {
 	// ShownAt is when the pet put it on screen, or the zero time if it is
 	// still waiting its turn.
 	ShownAt time.Time `json:"shown_at,omitzero"`
+	// Link is the article a headline points at. Only remarks have one.
+	Link string `json:"link,omitempty"`
+	// Published is when the feed says the article appeared, or the zero time
+	// if it did not say. Only remarks have one.
+	Published time.Time `json:"published,omitzero"`
 }
 
 // Shown reports whether the pet has displayed this message.
@@ -43,13 +49,27 @@ type Store struct {
 	// nextID numbers messages within this run. The record does not outlive the
 	// process, so a counter is identifier enough.
 	nextID int64
+	// prefix tells one store's IDs from another's, so the page can hold both
+	// lists without two different things both being "m1".
+	prefix string
 	// now is swappable for tests.
 	now func() time.Time
 }
 
 // New returns an empty store keeping as much as cfg allows.
 func New(cfg config.History) *Store {
-	return &Store{cfg: cfg, now: time.Now}
+	return &Store{cfg: cfg, now: time.Now, prefix: "m"}
+}
+
+// NewRemarks returns an empty store for what the pet says of its own accord.
+//
+// It is a second store rather than a kind of record in the first so that the
+// two are limited separately. A pet reading out headlines says a great deal,
+// and sharing one limit would have it push the messages somebody actually sent
+// out of the record — which is the reason remarks were not recorded at all
+// until they had somewhere of their own.
+func NewRemarks(cfg config.History) *Store {
+	return &Store{cfg: cfg, now: time.Now, prefix: "r"}
 }
 
 // SetLimits adopts new retention settings and prunes to match them.
@@ -70,12 +90,35 @@ func (s *Store) Add(msg message.Message) Record {
 
 	s.nextID++
 	rec := Record{
-		ID:       fmt.Sprintf("m%d", s.nextID),
+		ID:       fmt.Sprintf("%s%d", s.prefix, s.nextID),
 		Text:     msg.Text,
 		Title:    msg.Title,
 		Level:    msg.Level,
 		Duration: msg.Duration,
 		QueuedAt: s.now(),
+	}
+	s.records = append(s.records, rec)
+	s.prune()
+	return rec
+}
+
+// AddRemark records something the pet has just said of its own accord. A
+// remark goes straight on screen, so it is recorded as already shown.
+func (s *Store) AddRemark(r chatter.Remark) Record {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.nextID++
+	now := s.now()
+	rec := Record{
+		ID:        fmt.Sprintf("%s%d", s.prefix, s.nextID),
+		Text:      r.Text,
+		Title:     r.Title,
+		Level:     message.LevelInfo,
+		QueuedAt:  now,
+		ShownAt:   now,
+		Link:      r.Link,
+		Published: r.At,
 	}
 	s.records = append(s.records, rec)
 	s.prune()

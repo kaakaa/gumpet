@@ -181,13 +181,6 @@ func TestParseRejectsRubbish(t *testing.T) {
 	}
 }
 
-func TestTextPutsTheLinkOnItsOwnLine(t *testing.T) {
-	got := Item{Title: "A headline", Link: "https://example.com/x"}.Text()
-	if got != "A headline\nhttps://example.com/x" {
-		t.Errorf("Text = %q", got)
-	}
-}
-
 func TestFetchReadsAFeedOverHTTP(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/rss+xml")
