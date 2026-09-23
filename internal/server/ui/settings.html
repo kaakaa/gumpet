@@ -53,6 +53,10 @@
     flex-wrap: wrap;
     margin-bottom: 24px;
   }
+  nav { display: flex; align-items: center; gap: 14px; }
+  /* The picker is chrome, not a setting, so it stays out of the way: narrow,
+     and no wider than the two language names it holds. */
+  nav select { width: auto; max-width: none; padding: 4px 8px; font-size: 13px; }
   nav a { color: var(--accent); text-decoration: none; font-weight: 500; }
   nav a:hover { text-decoration: underline; }
   h1 { margin: 0; font-size: 22px; letter-spacing: -0.01em; }
@@ -198,17 +202,26 @@
 <main>
   <header>
     <div>
-      <h1>gumpet <span>settings</span></h1>
+      <h1>gumpet <span data-i18n>settings</span></h1>
       <p class="path" id="path"></p>
     </div>
-    <nav><a href="/messages">Messages &rarr;</a></nav>
+    <nav>
+      <!-- Each language is named in itself, so it is readable to whoever wants
+           it. These two are the only labels on the page that are never
+           translated. -->
+      <select id="lang" aria-label="Language">
+        <option value="en">English</option>
+        <option value="ja">日本語</option>
+      </select>
+      <a href="/messages" data-i18n>Messages →</a>
+    </nav>
   </header>
 
   <div class="note err" id="auth" hidden>
-    <p style="margin:0 0 8px">This gumpet needs a token.</p>
+    <p style="margin:0 0 8px" data-i18n>This gumpet needs a token.</p>
     <div class="inline">
       <input type="text" id="token-input" placeholder="server.token" autocomplete="off">
-      <button type="button" id="token-save">Unlock</button>
+      <button type="button" id="token-save" data-i18n>Unlock</button>
     </div>
   </div>
 
@@ -216,233 +229,233 @@
 
   <form id="form" hidden>
     <section>
-      <h2>Where the pet may go</h2>
+      <h2 data-i18n>Where the pet may go</h2>
       <div class="row">
-        <label for="display">Monitor</label>
+        <label for="display" data-i18n>Monitor</label>
         <select id="display" data-path="stage.display" data-kind="int"></select>
-        <p class="hint">The display the pet lives on. It stays on that one.</p>
+        <p class="hint" data-i18n>The display the pet lives on. It stays on that one.</p>
       </div>
       <div class="row">
-        <label for="fullscreen">Roam the whole screen</label>
+        <label for="fullscreen" data-i18n>Roam the whole screen</label>
         <input type="checkbox" id="fullscreen" data-path="stage.fullscreen">
-        <p class="hint">
+        <p class="hint" data-i18n>
           gumpet's window is only as big as the pet and follows it around, so
           letting it roam wider costs no screen space.
         </p>
       </div>
       <div class="row">
-        <label for="anchor">Corner</label>
+        <label for="anchor" data-i18n>Corner</label>
         <select id="anchor" data-path="stage.anchor" data-corner-only>
-          <option value="bottom-right">Bottom right</option>
-          <option value="bottom-left">Bottom left</option>
-          <option value="top-right">Top right</option>
-          <option value="top-left">Top left</option>
-          <option value="center">Center</option>
-          <option value="custom">Custom position</option>
+          <option value="bottom-right" data-i18n>Bottom right</option>
+          <option value="bottom-left" data-i18n>Bottom left</option>
+          <option value="top-right" data-i18n>Top right</option>
+          <option value="top-left" data-i18n>Top left</option>
+          <option value="center" data-i18n>Center</option>
+          <option value="custom" data-i18n>Custom position</option>
         </select>
-        <p class="hint">Which part of the monitor the pet keeps to.</p>
+        <p class="hint" data-i18n>Which part of the monitor the pet keeps to.</p>
       </div>
       <div class="row">
-        <label for="stage-width">Size</label>
+        <label for="stage-width" data-i18n>Size</label>
         <div>
           <input type="number" id="stage-width" data-path="stage.width" data-kind="int" min="1" step="1" data-corner-only>
-          &times;
+          ×
           <input type="number" data-path="stage.height" data-kind="int" min="1" step="1" data-corner-only>
         </div>
-        <p class="hint">The area the pet can walk around in, in pixels.</p>
+        <p class="hint" data-i18n>The area the pet can walk around in, in pixels.</p>
       </div>
       <div class="row">
-        <label for="margin-x">Margin</label>
+        <label for="margin-x" data-i18n>Margin</label>
         <div>
           <input type="number" id="margin-x" data-path="stage.margin_x" data-kind="int" step="1" data-corner-only>
-          &times;
+          ×
           <input type="number" data-path="stage.margin_y" data-kind="int" step="1" data-corner-only>
         </div>
-        <p class="hint">Distance from the corner. Raise the second one to clear the macOS Dock.</p>
+        <p class="hint" data-i18n>Distance from the corner. Raise the second one to clear the macOS Dock.</p>
       </div>
       <div class="row">
-        <label for="stage-x">Custom position</label>
+        <label for="stage-x" data-i18n>Custom position</label>
         <div>
           <input type="number" id="stage-x" data-path="stage.x" data-kind="int" step="1" data-custom-only>
           ,
           <input type="number" data-path="stage.y" data-kind="int" step="1" data-custom-only>
         </div>
-        <p class="hint">Monitor coordinates, used only when the corner is "Custom position".</p>
+        <p class="hint" data-i18n>Monitor coordinates, used only when the corner is "Custom position".</p>
       </div>
     </section>
 
     <section>
-      <h2>Pet</h2>
+      <h2 data-i18n>Pet</h2>
       <div class="row">
-        <label for="pet-pick">Pet</label>
+        <label for="pet-pick" data-i18n>Pet</label>
         <select id="pet-pick"></select>
-        <p class="hint">The pets gumpet ships with, or artwork of your own.</p>
+        <p class="hint" data-i18n>The pets gumpet ships with, or artwork of your own.</p>
       </div>
       <div class="row" id="source-row">
-        <label for="source">Artwork</label>
-        <input type="text" id="source" data-path="pet.source" placeholder="(the built-in gopher)" spellcheck="false">
-        <p class="hint">
+        <label for="source" data-i18n>Artwork</label>
+        <input type="text" id="source" data-path="pet.source" placeholder="(the built-in gopher)" data-i18n-placeholder spellcheck="false">
+        <p class="hint" data-i18n>
           Path to a PNG, JPEG, animated GIF, or a directory of frames played in
           file-name order.
         </p>
       </div>
       <div class="row">
-        <label for="smooth">Enlarging</label>
+        <label for="smooth" data-i18n>Enlarging</label>
         <select id="smooth" data-path="pet.smooth">
-          <option value="auto">Let the artwork decide</option>
-          <option value="on">Smooth</option>
-          <option value="off">Keep the edges hard</option>
+          <option value="auto" data-i18n>Let the artwork decide</option>
+          <option value="on" data-i18n>Smooth</option>
+          <option value="off" data-i18n>Keep the edges hard</option>
         </select>
-        <p class="hint">
-          Pixel art wants hard edges &mdash; smoothing only blurs the squares it
+        <p class="hint" data-i18n>
+          Pixel art wants hard edges — smoothing only blurs the squares it
           is drawn from. The bundled pets already know which they are.
         </p>
       </div>
       <div class="row">
-        <label for="scale">Scale</label>
+        <label for="scale" data-i18n>Scale</label>
         <input type="number" id="scale" data-path="pet.scale" data-kind="float" min="0.05" step="0.05">
-        <p class="hint">The built-in gopher is 200 &times; 200 pixels at 1.0.</p>
+        <p class="hint" data-i18n>The built-in gopher is 200 × 200 pixels at 1.0.</p>
       </div>
       <div class="row">
-        <label for="fps">Frame rate</label>
+        <label for="fps" data-i18n>Frame rate</label>
         <input type="number" id="fps" data-path="pet.fps" data-kind="float" min="0.5" step="0.5">
-        <p class="hint">Ignored for animated GIFs, which carry their own timing.</p>
+        <p class="hint" data-i18n>Ignored for animated GIFs, which carry their own timing.</p>
       </div>
       <div class="row">
-        <label for="flip">Mirror when walking right</label>
+        <label for="flip" data-i18n>Mirror when walking right</label>
         <input type="checkbox" id="flip" data-path="pet.flip_when_facing_right">
-        <p class="hint">Turn this off if your artwork should never be flipped.</p>
+        <p class="hint" data-i18n>Turn this off if your artwork should never be flipped.</p>
       </div>
     </section>
 
     <section>
-      <h2>Behaviour</h2>
+      <h2 data-i18n>Behaviour</h2>
       <div class="row">
-        <label for="mode">When to show the pet</label>
+        <label for="mode" data-i18n>When to show the pet</label>
         <select id="mode" data-path="behavior.mode">
-          <option value="always">Always on screen</option>
-          <option value="faded">On screen, but faded when idle</option>
-          <option value="on-message">Only while a message is up</option>
+          <option value="always" data-i18n>Always on screen</option>
+          <option value="faded" data-i18n>On screen, but faded when idle</option>
+          <option value="on-message" data-i18n>Only while a message is up</option>
         </select>
       </div>
       <div class="row">
-        <label for="idle-opacity">Faded to</label>
+        <label for="idle-opacity" data-i18n>Faded to</label>
         <input type="number" id="idle-opacity" data-path="behavior.idle_opacity" data-kind="float" min="0.05" max="1" step="0.05" data-faded-only>
-        <p class="hint">
+        <p class="hint" data-i18n>
           How solid the pet is while it has nothing to say: 1 is fully opaque,
           0.35 is a faint outline. It goes back to full whenever it speaks or
           you open its menu.
         </p>
       </div>
       <div class="row">
-        <label for="roam">How it gets around</label>
+        <label for="roam" data-i18n>How it gets around</label>
         <select id="roam" data-path="behavior.roam">
-          <option value="none">Stands still</option>
-          <option value="horizontal">Walks back and forth</option>
-          <option value="perimeter">Walks round the edges</option>
-          <option value="wander">Wanders anywhere</option>
+          <option value="none" data-i18n>Stands still</option>
+          <option value="horizontal" data-i18n>Walks back and forth</option>
+          <option value="perimeter" data-i18n>Walks round the edges</option>
+          <option value="wander" data-i18n>Wanders anywhere</option>
         </select>
       </div>
       <div class="row">
-        <label for="speed">Walking speed</label>
+        <label for="speed" data-i18n>Walking speed</label>
         <input type="number" id="speed" data-path="behavior.speed" data-kind="float" min="0" step="5">
-        <p class="hint">Pixels per second.</p>
+        <p class="hint" data-i18n>Pixels per second.</p>
       </div>
       <div class="row">
-        <label for="jump">Hop now and then</label>
+        <label for="jump" data-i18n>Hop now and then</label>
         <input type="checkbox" id="jump" data-path="behavior.jump">
-        <p class="hint">
-          Only applies where there is a floor to leave: &ldquo;Stand
-          still&rdquo; and &ldquo;Back and forth&rdquo;.
+        <p class="hint" data-i18n>
+          Only applies where there is a floor to leave: “Stand
+          still” and “Back and forth”.
         </p>
       </div>
       <div class="row">
-        <label for="chatter">Talk to itself</label>
+        <label for="chatter" data-i18n>Talk to itself</label>
         <input type="checkbox" id="chatter" data-path="behavior.chatter.enabled">
-        <p class="hint">
+        <p class="hint" data-i18n>
           Say something now and then when no message has arrived, so the pet is
           doing something between notifications. Nothing is fetched over the
-          network. Ignored while the mode above is &ldquo;Hide until a
-          message&rdquo;, since a remark would only summon the pet back.
+          network. Ignored while the mode above is “Hide until a
+          message”, since a remark would only summon the pet back.
         </p>
       </div>
       <div class="row">
-        <label for="chatter-interval">How often</label>
+        <label for="chatter-interval" data-i18n>How often</label>
         <input type="number" id="chatter-interval" data-path="behavior.chatter.interval_sec" data-kind="float" min="1" step="30">
-        <p class="hint">Seconds between remarks, give or take 30%.</p>
+        <p class="hint" data-i18n>Seconds between remarks, give or take 30%.</p>
       </div>
       <div class="row">
-        <label for="chatter-source">Sayings file</label>
-        <input type="text" id="chatter-source" data-path="behavior.chatter.source" placeholder="the bundled list">
-        <p class="hint">
+        <label for="chatter-source" data-i18n>Sayings file</label>
+        <input type="text" id="chatter-source" data-path="behavior.chatter.source" placeholder="the bundled list" data-i18n-placeholder>
+        <p class="hint" data-i18n>
           One saying per line; blank lines and lines starting with # are
           skipped. Leave empty for the list gumpet ships with.
         </p>
       </div>
       <div class="row">
-        <label for="chatter-feeds">Or feeds</label>
+        <label for="chatter-feeds" data-i18n>Or feeds</label>
         <textarea id="chatter-feeds" data-path="behavior.chatter.feeds" data-kind="feeds" rows="4"
                   spellcheck="false" placeholder="HN https://news.ycombinator.com/rss"></textarea>
-        <p class="hint">
-          One feed per line, as <code>name URL</code> &mdash; the URL is the
+        <p class="hint" data-i18n>
+          One feed per line, as <code>name URL</code> — the URL is the
           last thing on the line, and whatever comes before it is the name that
           appears above the headline. A line with just a URL gets no name.
           <strong>This is the only part of gumpet that connects out to
           anywhere.</strong> Empty means it makes no outgoing requests at all.
-          Only http and https, and only the headlines &mdash; never the
+          Only http and https, and only the headlines — never the
           articles.
         </p>
       </div>
       <div class="row">
-        <label for="chatter-age">Ignore older than</label>
+        <label for="chatter-age" data-i18n>Ignore older than</label>
         <input type="number" id="chatter-age" data-path="behavior.chatter.max_age_days" data-kind="float" min="0" step="1">
-        <p class="hint">
+        <p class="hint" data-i18n>
           Days. A podcast's whole archive is a perfectly good feed, and without
           this the pet mostly reads out episodes from years ago. 0 keeps
           everything. Items a feed did not date are always kept.
         </p>
       </div>
       <div class="row">
-        <label for="chatter-fetch">Re-read the feeds</label>
+        <label for="chatter-fetch" data-i18n>Re-read the feeds</label>
         <input type="number" id="chatter-fetch" data-path="behavior.chatter.fetch_interval_sec" data-kind="float" min="1" step="60">
-        <p class="hint">Seconds between fetches. No reason to fetch once per remark.</p>
+        <p class="hint" data-i18n>Seconds between fetches. No reason to fetch once per remark.</p>
       </div>
     </section>
 
     <section>
-      <h2>Messages</h2>
+      <h2 data-i18n>Messages</h2>
       <div class="row">
-        <label for="duration">Time on screen</label>
+        <label for="duration" data-i18n>Time on screen</label>
         <input type="number" id="duration" data-path="message.duration_sec" data-kind="float" min="0.5" step="0.5">
-        <p class="hint">Seconds. A message may override this when it is sent.</p>
+        <p class="hint" data-i18n>Seconds. A message may override this when it is sent.</p>
       </div>
       <div class="row">
-        <label for="max-visible">Balloons at once</label>
+        <label for="max-visible" data-i18n>Balloons at once</label>
         <input type="number" id="max-visible" data-path="message.max_visible" data-kind="int" min="1" step="1">
-        <p class="hint">
+        <p class="hint" data-i18n>
           Messages that arrive together are shown together, stacked above the
           pet, up to this many. Raise it for a noisier pet.
         </p>
       </div>
       <div class="row">
-        <label for="max-width">Balloon width</label>
+        <label for="max-width" data-i18n>Balloon width</label>
         <input type="number" id="max-width" data-path="message.max_width" data-kind="int" min="60" step="20">
-        <p class="hint">How wide the balloon may grow before the text wraps, in pixels.</p>
+        <p class="hint" data-i18n>How wide the balloon may grow before the text wraps, in pixels.</p>
       </div>
       <div class="row">
-        <label for="text-scale">Text size</label>
+        <label for="text-scale" data-i18n>Text size</label>
         <input type="number" id="text-scale" data-path="message.text_scale" data-kind="float" min="0.5" step="0.25">
-        <p class="hint">Relative to the built-in font's own 12px.</p>
+        <p class="hint" data-i18n>Relative to the built-in font's own 12px.</p>
       </div>
       <div class="row">
-        <label for="max-queue">Queue length</label>
+        <label for="max-queue" data-i18n>Queue length</label>
         <input type="number" id="max-queue" data-path="message.max_queue" data-kind="int" min="1" step="1">
-        <p class="hint">How many messages may wait their turn before the oldest are dropped.</p>
+        <p class="hint" data-i18n>How many messages may wait their turn before the oldest are dropped.</p>
       </div>
       <div class="row">
-        <label for="type-speed">Typing speed</label>
+        <label for="type-speed" data-i18n>Typing speed</label>
         <input type="number" id="type-speed" data-path="message.type_speed" data-kind="float" min="0" step="5">
-        <p class="hint">
+        <p class="hint" data-i18n>
           Characters a second, so a message reads as being said rather than
           just appearing. 0 shows it all at once. The time a message stays up
           is counted from when it has finished, so a long one is not given less
@@ -450,40 +463,40 @@
         </p>
       </div>
       <div class="row">
-        <label for="open-links">Open links when clicked</label>
+        <label for="open-links" data-i18n>Open links when clicked</label>
         <input type="checkbox" id="open-links" data-path="message.open_links">
-        <p class="hint">
+        <p class="hint" data-i18n>
           URLs in a message are spotted on their own and always drawn as links.
           This decides whether clicking one opens it. Only http and https are
-          ever opened &mdash; anything that can send gumpet a message can put a
+          ever opened — anything that can send gumpet a message can put a
           link in front of you.
         </p>
       </div>
       <div class="row">
-        <label for="test-text">Try it</label>
+        <label for="test-text" data-i18n>Try it</label>
         <div class="inline">
           <input type="text" id="test-text" value="Hello, gopher!" autocomplete="off">
-          <button type="button" class="secondary" id="test-send">Send</button>
+          <button type="button" class="secondary" id="test-send" data-i18n>Send</button>
         </div>
-        <p class="hint">Sends a message to the pet right now, using the settings it is currently running with.</p>
+        <p class="hint" data-i18n>Sends a message to the pet right now, using the settings it is currently running with.</p>
       </div>
     </section>
 
     <section>
-      <h2>Font</h2>
+      <h2 data-i18n>Font</h2>
       <div class="row">
-        <label for="font-path">Font file</label>
-        <input type="text" id="font-path" data-path="font.path" placeholder="(a font from this machine)" spellcheck="false">
-        <p class="hint">
+        <label for="font-path" data-i18n>Font file</label>
+        <input type="text" id="font-path" data-path="font.path" placeholder="(a font from this machine)" data-i18n-placeholder spellcheck="false">
+        <p class="hint" data-i18n>
           A .ttf, .otf or .ttc to draw messages and the menu with. Leave it
           empty and gumpet looks for one on this machine — Hiragino on macOS,
           Yu Gothic on Windows.
         </p>
       </div>
       <div class="row">
-        <label for="font-system">Look for a system font</label>
+        <label for="font-system" data-i18n>Look for a system font</label>
         <input type="checkbox" id="font-system" data-path="font.system">
-        <p class="hint">
+        <p class="hint" data-i18n>
           Turn this off to use gumpet's own bitmap font instead. It is always
           available, but goes blocky when enlarged.
         </p>
@@ -491,54 +504,54 @@
     </section>
 
     <section>
-      <h2>Message history</h2>
+      <h2 data-i18n>Message history</h2>
       <div class="row">
-        <label for="history-max">Keep</label>
+        <label for="history-max" data-i18n>Keep</label>
         <input type="number" id="history-max" data-path="history.max" data-kind="int" min="1" step="10">
-        <p class="hint">
+        <p class="hint" data-i18n>
           How many messages the <a href="/messages">messages page</a> remembers,
           newest first.
         </p>
       </div>
       <div class="row">
-        <label for="history-hours">For</label>
+        <label for="history-hours" data-i18n>For</label>
         <input type="number" id="history-hours" data-path="history.hours" data-kind="float" min="0" step="1">
-        <p class="hint">Hours. 0 keeps them until the limit above is reached.</p>
+        <p class="hint" data-i18n>Hours. 0 keeps them until the limit above is reached.</p>
       </div>
     </section>
 
     <section>
-      <h2>Window</h2>
+      <h2 data-i18n>Window</h2>
       <div class="row">
-        <label for="on-top">Always on top</label>
+        <label for="on-top" data-i18n>Always on top</label>
         <input type="checkbox" id="on-top" data-path="window.always_on_top">
       </div>
       <div class="row">
-        <label for="click-through">Click through</label>
+        <label for="click-through" data-i18n>Click through</label>
         <input type="checkbox" id="click-through" data-path="window.click_through">
-        <p class="hint">
+        <p class="hint" data-i18n>
           Let clicks reach whatever is behind the pet, so it never steals one.
           Turning this on also means clicking the pet no longer opens its menu.
         </p>
       </div>
       <div class="row">
-        <label for="skip-taskbar">Hide from the taskbar<span class="tag" data-restart>restart</span></label>
+        <label for="skip-taskbar"><span data-i18n>Hide from the taskbar</span><span class="tag" data-restart data-i18n>restart</span></label>
         <input type="checkbox" id="skip-taskbar" data-path="window.skip_taskbar">
-        <p class="hint">Windows only.</p>
+        <p class="hint" data-i18n>Windows only.</p>
       </div>
     </section>
 
     <section>
-      <h2>Server</h2>
+      <h2 data-i18n>Server</h2>
       <div class="row">
-        <label for="addr">Listen address<span class="tag" data-restart>restart</span></label>
+        <label for="addr"><span data-i18n>Listen address</span><span class="tag" data-restart data-i18n>restart</span></label>
         <input type="text" id="addr" data-path="server.addr" spellcheck="false">
-        <p class="hint">Keep this on 127.0.0.1 unless you want the network to reach your desktop.</p>
+        <p class="hint" data-i18n>Keep this on 127.0.0.1 unless you want the network to reach your desktop.</p>
       </div>
       <div class="row">
-        <label for="token">Token</label>
-        <input type="text" id="token" data-path="server.token" placeholder="(no token required)" autocomplete="off" spellcheck="false">
-        <p class="hint">When set, every API request must present it.</p>
+        <label for="token" data-i18n>Token</label>
+        <input type="text" id="token" data-path="server.token" placeholder="(no token required)" data-i18n-placeholder autocomplete="off" spellcheck="false">
+        <p class="hint" data-i18n>When set, every API request must present it.</p>
       </div>
     </section>
   </form>
@@ -546,15 +559,164 @@
 
 <div class="bar">
   <div class="bar-inner">
-    <button type="button" id="save" disabled>Save</button>
-    <button type="button" class="secondary" id="revert" disabled>Revert</button>
-    <span class="status" id="status">Loading&hellip;</span>
+    <button type="button" id="save" disabled data-i18n>Save</button>
+    <button type="button" class="secondary" id="revert" disabled data-i18n>Revert</button>
+    <span class="status" id="status">Loading…</span>
   </div>
 </div>
 
 <script>
 (function () {
   "use strict";
+
+  // The English on this page is the source text, not a key: every translatable
+  // node carries data-i18n and keeps its English inside it. So the page still
+  // reads before any of this runs, a missing translation shows English rather
+  // than a key, and there is only ever one copy of the English to edit.
+  //
+  // STRINGS therefore holds translations only. A test walks this file and
+  // fails if the page says something the dictionary has not been told about,
+  // or if the dictionary still holds a sentence the page no longer says.
+  var LANG_KEY = "gumpet-lang";
+  var STRINGS = {
+    ja: {
+      "settings": "の設定",
+      "Messages →": "メッセージ →",
+      "This gumpet needs a token.": "この gumpet はトークンを求めています。",
+      "Unlock": "解除",
+
+      "Where the pet may go": "ペットが行ける範囲",
+      "Monitor": "ディスプレイ",
+      "The display the pet lives on. It stays on that one.": "ペットが住むディスプレイ。ここから出ていきません。",
+      "Roam the whole screen": "画面全体を歩き回る",
+      "gumpet's window is only as big as the pet and follows it around, so letting it roam wider costs no screen space.": "gumpet のウィンドウはペットと同じ大きさしかなく、ペットについて回ります。広く歩かせても画面が狭くなるわけではありません。",
+      "Corner": "寄せる場所",
+      "Bottom right": "右下",
+      "Bottom left": "左下",
+      "Top right": "右上",
+      "Top left": "左上",
+      "Center": "中央",
+      "Custom position": "座標で指定",
+      "Which part of the monitor the pet keeps to.": "ディスプレイのどのあたりにペットを置いておくか。",
+      "Size": "大きさ",
+      "The area the pet can walk around in, in pixels.": "ペットが歩き回れる範囲。ピクセル。",
+      "Margin": "余白",
+      "Distance from the corner. Raise the second one to clear the macOS Dock.": "隅からの距離。macOS の Dock を避けるには2つ目を大きくします。",
+      "Monitor coordinates, used only when the corner is \"Custom position\".": "ディスプレイ上の座標。寄せる場所が「座標で指定」のときだけ使われます。",
+
+      "Pet": "ペット",
+      "The pets gumpet ships with, or artwork of your own.": "gumpet に同梱されているペットか、自分で用意した絵。",
+      "Artwork": "絵",
+      "Path to a PNG, JPEG, animated GIF, or a directory of frames played in file-name order.": "PNG・JPEG・アニメーション GIF のパス。または、ファイル名順に再生するコマを入れたディレクトリ。",
+      "Enlarging": "拡大のしかた",
+      "Let the artwork decide": "絵にまかせる",
+      "Smooth": "なめらかにする",
+      "Keep the edges hard": "輪郭を残す",
+      "Pixel art wants hard edges — smoothing only blurs the squares it is drawn from. The bundled pets already know which they are.": "ピクセルアートに要るのは硬い輪郭で — なめらかにしても、描かれている四角が滲むだけです。同梱のペットは自分がどちらなのかを知っています。",
+      "Scale": "倍率",
+      "The built-in gopher is 200 × 200 pixels at 1.0.": "同梱の gopher は 1.0 で 200 × 200 ピクセルです。",
+      "Frame rate": "コマ数",
+      "Ignored for animated GIFs, which carry their own timing.": "アニメーション GIF は自分でタイミングを持っているので、この値は使われません。",
+      "Mirror when walking right": "右へ歩くときは反転する",
+      "Turn this off if your artwork should never be flipped.": "絵を決して反転させたくないときは off に。",
+
+      "Behaviour": "ふるまい",
+      "When to show the pet": "ペットを出しておくとき",
+      "Always on screen": "常に出しておく",
+      "On screen, but faded when idle": "出しておくが、暇なときは薄くする",
+      "Only while a message is up": "メッセージが出ている間だけ",
+      "Faded to": "薄さ",
+      "How solid the pet is while it has nothing to say: 1 is fully opaque, 0.35 is a faint outline. It goes back to full whenever it speaks or you open its menu.": "言うことが何も無い間のペットの濃さ。1 で完全に不透明、0.35 でうっすら輪郭が見える程度。喋るときと、メニューを開いたときは元の濃さに戻ります。",
+      "How it gets around": "動きかた",
+      "Stands still": "動かない",
+      "Walks back and forth": "左右に往復する",
+      "Walks round the edges": "画面の縁を回る",
+      "Wanders anywhere": "どこでも歩き回る",
+      "Walking speed": "歩く速さ",
+      "Pixels per second.": "1秒あたりのピクセル。",
+      "Hop now and then": "ときどき跳ねる",
+      "Only applies where there is a floor to leave: “Stand still” and “Back and forth”.": "跳ねるには離れる床が要るので、「動かない」と「左右に往復する」のときだけ効きます。",
+      "Talk to itself": "独り言を言う",
+      "Say something now and then when no message has arrived, so the pet is doing something between notifications. Nothing is fetched over the network. Ignored while the mode above is “Hide until a message”, since a remark would only summon the pet back.": "メッセージが来ない間もときどき何か言うようにして、通知と通知の間にもペットが何かしているようにします。ネットワークからは何も取ってきません。上のモードが「メッセージが出ている間だけ」のときは無視されます — 独り言のためにペットを呼び戻すことになるので。",
+      "How often": "間隔",
+      "Seconds between remarks, give or take 30%.": "独り言と独り言の間の秒数。前後30%ほどばらつきます。",
+      "Sayings file": "独り言のファイル",
+      "One saying per line; blank lines and lines starting with # are skipped. Leave empty for the list gumpet ships with.": "1行に1つ。空行と # で始まる行は読み飛ばします。空にすると gumpet に同梱されている一覧を使います。",
+      "Or feeds": "またはフィード",
+      "One feed per line, as <code>name URL</code> — the URL is the last thing on the line, and whatever comes before it is the name that appears above the headline. A line with just a URL gets no name. <strong>This is the only part of gumpet that connects out to anywhere.</strong> Empty means it makes no outgoing requests at all. Only http and https, and only the headlines — never the articles.": "1行に1つ、<code>名前 URL</code> の形で — URL は行の最後に置き、その手前にあるものが見出しの上に出る名前になります。URL だけの行には名前が付きません。<strong>gumpet が外に接続するのはここだけです。</strong>空なら、外向きの通信は一切しません。http と https だけ、しかも見出しだけで — 記事そのものは取りに行きません。",
+      "Ignore older than": "無視する古さ",
+      "Days. A podcast's whole archive is a perfectly good feed, and without this the pet mostly reads out episodes from years ago. 0 keeps everything. Items a feed did not date are always kept.": "日数。ポッドキャストの全アーカイブも立派なフィードで、これが無いとペットは何年も前の回ばかり読み上げます。0 ならすべて残ります。日付の無い項目は常に残ります。",
+      "Re-read the feeds": "フィードの読み直し",
+      "Seconds between fetches. No reason to fetch once per remark.": "取得と取得の間の秒数。独り言1回ごとに取りに行く理由はありません。",
+
+      "Messages": "メッセージ",
+      "Time on screen": "表示時間",
+      "Seconds. A message may override this when it is sent.": "秒。送るときにメッセージごとに指定することもできます。",
+      "Balloons at once": "同時に出す吹き出し",
+      "Messages that arrive together are shown together, stacked above the pet, up to this many. Raise it for a noisier pet.": "同時に届いたメッセージは、ペットの上に積んでこの数まで同時に出します。にぎやかにしたければ増やしてください。",
+      "Balloon width": "吹き出しの幅",
+      "How wide the balloon may grow before the text wraps, in pixels.": "文字が折り返すまでに吹き出しが広がってよい幅。ピクセル。",
+      "Text size": "文字の大きさ",
+      "Relative to the built-in font's own 12px.": "同梱フォントの 12px を 1.0 とした倍率。",
+      "Queue length": "順番待ちの数",
+      "How many messages may wait their turn before the oldest are dropped.": "古いものが捨てられるまでに、何件まで順番待ちできるか。",
+      "Typing speed": "喋る速さ",
+      "Characters a second, so a message reads as being said rather than just appearing. 0 shows it all at once. The time a message stays up is counted from when it has finished, so a long one is not given less time to be read.": "1秒あたりの文字数。ただ現れるのではなく、喋っているように読めます。0 なら一度に全部出ます。表示時間は喋り終わってから数えるので、長いメッセージが読む時間を損することはありません。",
+      "Open links when clicked": "クリックでリンクを開く",
+      "URLs in a message are spotted on their own and always drawn as links. This decides whether clicking one opens it. Only http and https are ever opened — anything that can send gumpet a message can put a link in front of you.": "メッセージの中の URL はひとりでに見つけて、常にリンクとして描きます。ここで決めるのは、クリックしたときに開くかどうかだけです。開くのは http と https だけ — gumpet にメッセージを送れるものは、あなたの目の前にリンクを置けるということでもあります。",
+      "Try it": "試す",
+      "Send": "送信",
+      "Sends a message to the pet right now, using the settings it is currently running with.": "いまペットが動いている設定のまま、メッセージを送ってみます。",
+
+      "Font": "フォント",
+      "Font file": "フォントファイル",
+      "A .ttf, .otf or .ttc to draw messages and the menu with. Leave it empty and gumpet looks for one on this machine — Hiragino on macOS, Yu Gothic on Windows.": "メッセージとメニューを描くための .ttf・.otf・.ttc。空にすると、gumpet がこの端末から探します — macOS ならヒラギノ、Windows なら游ゴシック。",
+      "Look for a system font": "システムのフォントを探す",
+      "Turn this off to use gumpet's own bitmap font instead. It is always available, but goes blocky when enlarged.": "off にすると、代わりに gumpet 自身のビットマップフォントを使います。必ず使えますが、拡大すると粗くなります。",
+
+      "Message history": "メッセージの履歴",
+      "Keep": "残す件数",
+      "How many messages the <a href=\"/messages\">messages page</a> remembers, newest first.": "<a href=\"/messages\">メッセージのページ</a>が新しい順に覚えておく件数。",
+      "For": "残す時間",
+      "Hours. 0 keeps them until the limit above is reached.": "時間。0 なら、上の件数に達するまで残ります。",
+
+      "Window": "ウィンドウ",
+      "Always on top": "常に最前面",
+      "Click through": "クリックを透かす",
+      "Let clicks reach whatever is behind the pet, so it never steals one. Turning this on also means clicking the pet no longer opens its menu.": "ペットの後ろにあるものへクリックを届かせ、ペットがクリックを横取りしないようにします。on にすると、ペットをクリックしてもメニューは開かなくなります。",
+      "Hide from the taskbar": "タスクバーに出さない",
+      "restart": "要再起動",
+      "Windows only.": "Windows のみ。",
+
+      "Server": "サーバー",
+      "Listen address": "待ち受けアドレス",
+      "Keep this on 127.0.0.1 unless you want the network to reach your desktop.": "ネットワークからデスクトップに届いてほしいのでなければ、127.0.0.1 のままにしてください。",
+      "Token": "トークン",
+      "When set, every API request must present it.": "設定すると、すべての API 呼び出しがこれを示す必要があります。",
+
+      "Save": "保存",
+      "Revert": "元に戻す",
+
+      "(the built-in gopher)": "（同梱の gopher）",
+      "the bundled list": "同梱の一覧",
+      "(a font from this machine)": "（この端末にあるフォント）",
+      "(no token required)": "（トークンは不要）",
+
+      "Loading…": "読み込み中…",
+      "Unsaved changes": "未保存の変更",
+      "Saved": "保存済み",
+      "Saving…": "保存中…",
+      "Locked": "ロック中",
+      "Error": "エラー",
+      "Not saved": "保存できませんでした",
+      "Could not load settings": "設定を読み込めませんでした",
+      "Settings saved. The pet picked them up straight away — except the listen address and the taskbar setting, which wait for a restart.": "保存しました。ペットはすぐに拾いました — 待ち受けアドレスとタスクバーの設定だけは、次に起動したときからです。",
+      "Sent. Look at your pet.": "送りました。ペットを見てください。",
+      "Custom…": "自分の絵…",
+      "{0}. (not attached)": "{0}. （つながっていません）",
+      "Takes effect the next time gumpet starts": "次に gumpet を起動したときから効きます"
+    }
+  };
 
   var TOKEN_KEY = "gumpet-token";
   var fields = Array.prototype.slice.call(document.querySelectorAll("[data-path]"));
@@ -563,6 +725,71 @@
   try { token = sessionStorage.getItem(TOKEN_KEY) || ""; } catch (e) { token = ""; }
 
   var $ = function (id) { return document.getElementById(id); };
+
+  // Whatever the page says right now is read once, before anything replaces it.
+  var translatable = Array.prototype.map.call(
+    document.querySelectorAll("[data-i18n]"), function (el) {
+      return { el: el, en: collapse(el.innerHTML) };
+    });
+  var placeholders = Array.prototype.map.call(
+    document.querySelectorAll("[data-i18n-placeholder]"), function (el) {
+      return { el: el, en: el.placeholder };
+    });
+  var lang = pickLang();
+
+  function collapse(s) { return s.replace(/\s+/g, " ").trim(); }
+
+  // pickLang takes the remembered choice, then whatever the browser asks for,
+  // then English. It is kept per browser rather than in the config because it
+  // is about whoever is reading this page and not about the pet: two people at
+  // two machines can want different answers from one gumpet.
+  function pickLang() {
+    var saved = "";
+    try { saved = localStorage.getItem(LANG_KEY) || ""; } catch (e) { saved = ""; }
+    if (saved === "en" || STRINGS[saved]) { return saved; }
+    var want = navigator.languages || [navigator.language || ""];
+    for (var i = 0; i < want.length; i++) {
+      var code = String(want[i]).toLowerCase().split("-")[0];
+      if (STRINGS[code]) { return code; }
+    }
+    return "en";
+  }
+
+  function t(en) {
+    var dict = STRINGS[lang];
+    return (dict && dict[en]) || en;
+  }
+
+  // dyn is t for text this script creates rather than finds, so that it can be
+  // said again in another language without rebuilding whatever holds it.
+  function dyn(el, en, arg) {
+    el.setAttribute("data-i18n-dyn", en);
+    if (arg !== undefined) { el.setAttribute("data-i18n-arg", arg); }
+    redyn(el);
+  }
+
+  function redyn(el) {
+    el.textContent = t(el.getAttribute("data-i18n-dyn"))
+      .replace("{0}", el.getAttribute("data-i18n-arg") || "");
+  }
+
+  // applyLang says everything again in the current language. It never touches
+  // a field's value: changing the language is not a reason to lose what
+  // somebody was in the middle of typing.
+  function applyLang() {
+    document.documentElement.lang = lang;
+    // These translations are constants in this file — nothing a sender, a feed
+    // or the config can reach — which is what makes it safe to put them back
+    // as HTML, and that is what keeps the hints containing a link or a <code>
+    // working.
+    translatable.forEach(function (item) { item.el.innerHTML = t(item.en); });
+    placeholders.forEach(function (item) { item.el.placeholder = t(item.en); });
+    document.querySelectorAll("[data-i18n-dyn]").forEach(redyn);
+    $("lang").value = lang;
+    status(statusKey);
+    if (lastNote) { note(lastNote.kind, lastNote.key, lastNote.extra); }
+    if (restartRequired) { markRestart(); }
+  }
 
   function get(obj, path) {
     return path.split(".").reduce(function (o, k) { return o == null ? undefined : o[k]; }, obj);
@@ -595,16 +822,31 @@
     });
   }
 
-  function note(kind, text) {
+  var lastNote = null;
+
+  function note(kind, key, extra) {
+    lastNote = { kind: kind, key: key, extra: extra || "" };
     var el = $("banner");
     el.className = "note " + kind;
-    el.textContent = text;
+    el.textContent = t(key) + lastNote.extra;
     el.hidden = false;
   }
 
-  function clearNote() { $("banner").hidden = true; }
+  function clearNote() { lastNote = null; $("banner").hidden = true; }
 
-  function status(text) { $("status").textContent = text; }
+  var statusKey = "Loading…";
+
+  function status(key) { statusKey = key; $("status").textContent = t(key); }
+
+  // The restart tags only earn a title once the server has said which settings
+  // wait for one, and it has to be said again when the language changes.
+  var restartRequired = false;
+
+  function markRestart() {
+    document.querySelectorAll("[data-restart]").forEach(function (el) {
+      el.title = t("Takes effect the next time gumpet starts");
+    });
+  }
 
   // The monitors are whatever the machine reported when gumpet started, so the
   // choice is a list of displays by name rather than a number to be guessed at.
@@ -626,7 +868,7 @@
     })) {
       var missing = document.createElement("option");
       missing.value = chosen;
-      missing.textContent = chosen + ". (not attached)";
+      dyn(missing, "{0}. (not attached)", chosen);
       select.appendChild(missing);
     }
   }
@@ -670,7 +912,7 @@
     });
     var custom = document.createElement("option");
     custom.value = "\u0000custom";
-    custom.textContent = "Custom\u2026";
+    dyn(custom, "Custom…");
     sel.appendChild(custom);
   }
 
@@ -786,11 +1028,8 @@
     $("path").textContent = data.path;
     fillMonitors(data.monitors, loaded.stage.display);
     fillPets(data.pets);
-    if (data.restart_required && data.restart_required.length) {
-      document.querySelectorAll("[data-restart]").forEach(function (el) {
-        el.title = "Takes effect the next time gumpet starts";
-      });
-    }
+    restartRequired = !!(data.restart_required && data.restart_required.length);
+    if (restartRequired) { markRestart(); }
     fill(loaded);
     $("form").hidden = false;
     $("auth").hidden = true;
@@ -807,7 +1046,7 @@
   function load() {
     request("GET", "api/v1/config").then(adopt).catch(function (err) {
       if (err.unauthorized) { askForToken(); return; }
-      note("err", "Could not load settings: " + err.message);
+      note("err", "Could not load settings", ": " + err.message);
       status("Error");
     });
   }
@@ -880,10 +1119,17 @@
   });
   $("source").addEventListener("input", syncPet);
 
+  $("lang").addEventListener("change", function () {
+    lang = $("lang").value;
+    try { localStorage.setItem(LANG_KEY, lang); } catch (e) { /* private window */ }
+    applyLang();
+  });
+
   $("anchor").addEventListener("change", syncEnabled);
   $("fullscreen").addEventListener("change", syncEnabled);
   $("mode").addEventListener("change", syncEnabled);
 
+  applyLang();
   load();
 })();
 </script>
