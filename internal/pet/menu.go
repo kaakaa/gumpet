@@ -325,13 +325,20 @@ func (g *Game) handleInput(dt time.Duration) error {
 // a drag. Balloons are left alone: they are dismissed on press as before, so
 // only the pet itself can be grabbed.
 func (g *Game) handleDrag(mx, my float64, onPet bool, onBalloon int) (done bool, err error) {
-	// A stage filling the monitor has nowhere to be dragged to.
-	draggable := !g.cfg.Stage.Fullscreen
+	// A stage filling the monitor has nowhere to be dragged to, so there the
+	// pet itself is carried instead, and set down to walk on from where it was
+	// left. Anywhere else the whole stage moves, and the pet with it.
+	carryPet := g.cfg.Stage.Fullscreen
 
 	if inpututil.IsMouseButtonJustReleased(ebiten.MouseButtonLeft) {
 		wasPress := g.drag.Pressed()
 		if wasDrag := g.drag.Release(); wasDrag {
-			g.saveDraggedStage()
+			if carryPet {
+				// Nothing to save: where a roaming pet stands is not a setting.
+				g.endDrag(true)
+			} else {
+				g.saveDraggedStage()
+			}
 			return true, nil
 		}
 		if wasPress {
@@ -347,6 +354,16 @@ func (g *Game) handleDrag(mx, my float64, onPet bool, onBalloon int) (done bool,
 	// starts — which is exactly what it did.
 	if g.drag.Pressed() {
 		st := g.stage()
+		if carryPet {
+			px, py := g.walker.Pos()
+			x, y, dragging := g.drag.Move(mx, my,
+				drag.Rect{X: px, Y: py, W: g.petWidth(), H: g.petHeight()},
+				drag.Rect{W: st.W, H: st.H})
+			if dragging {
+				g.walker.Translate(x-px, y-py)
+			}
+			return true, nil
+		}
 		x, y, dragging := g.drag.Move(mx, my,
 			drag.Rect{X: st.X, Y: st.Y, W: st.W, H: st.H},
 			drag.Rect{W: g.monitor.W, H: g.monitor.H})
@@ -363,16 +380,17 @@ func (g *Game) handleDrag(mx, my float64, onPet bool, onBalloon int) (done bool,
 		return true, nil
 	}
 
-	// Every press on the pet starts a gesture, draggable or not: the menu
-	// opens when one ends, so a press that started none could never be a
-	// click. Whether the stage can move only decides what moving does.
+	// Every press on the pet starts a gesture: the menu opens when one ends,
+	// so a press that started none could never be a click. What is carried —
+	// the pet or its stage — only decides what moving does.
 	if g.menu == nil && onBalloon < 0 && onPet &&
 		inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
-		if draggable {
+		if carryPet {
+			px, py := g.walker.Pos()
+			g.drag.Press(mx, my, drag.Rect{X: px, Y: py, W: g.petWidth(), H: g.petHeight()})
+		} else {
 			st := g.stage()
 			g.drag.Press(mx, my, drag.Rect{X: st.X, Y: st.Y, W: st.W, H: st.H})
-		} else {
-			g.drag.PressFixed(mx, my)
 		}
 		return true, nil
 	}
