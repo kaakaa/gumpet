@@ -37,8 +37,6 @@ type Tracker struct {
 	// originX and originY are where the stage was when the press landed, so
 	// the stage moves with the cursor rather than jumping under it.
 	originX, originY float64
-	// fixed is a press on something that cannot be moved. See [Tracker.PressFixed].
-	fixed bool
 }
 
 // Press notes a button going down at a point, with the stage where it is. The
@@ -47,25 +45,8 @@ type Tracker struct {
 func (t *Tracker) Press(x, y float64, stage Rect) {
 	t.pressed = true
 	t.dragging = false
-	t.fixed = false
 	t.startX, t.startY = x, y
 	t.originX, t.originY = stage.X, stage.Y
-}
-
-// PressFixed notes a button going down on something that cannot be moved: a
-// pet roaming the whole screen has no stage to drag anywhere. The gesture is
-// followed all the same, and never becomes a drag however far the cursor
-// goes, so letting go is always a click.
-//
-// It exists because whether a press can drag must only decide what moving
-// does, never whether the press is heard. The first version of dragging
-// started no gesture at all on a fixed stage, and since the menu opens when a
-// gesture ends, a pet roaming the whole screen could not be clicked.
-func (t *Tracker) PressFixed(x, y float64) {
-	t.pressed = true
-	t.dragging = false
-	t.fixed = true
-	t.startX, t.startY = x, y
 }
 
 // Move reports where the stage should be now, and whether a drag is under way.
@@ -73,7 +54,7 @@ func (t *Tracker) PressFixed(x, y float64) {
 // Until the cursor has travelled [Threshold] it reports false and the stage is
 // left alone, because the gesture may still turn out to be a click.
 func (t *Tracker) Move(x, y float64, stage Rect, monitor Rect) (nx, ny float64, dragging bool) {
-	if !t.pressed || t.fixed {
+	if !t.pressed {
 		return stage.X, stage.Y, false
 	}
 	if !t.dragging {
@@ -94,7 +75,7 @@ func (t *Tracker) Move(x, y float64, stage Rect, monitor Rect) (nx, ny float64, 
 // was a click after all.
 func (t *Tracker) Release() (wasDrag bool) {
 	wasDrag = t.dragging
-	t.pressed, t.dragging, t.fixed = false, false, false
+	t.pressed, t.dragging = false, false
 	return wasDrag
 }
 
@@ -111,7 +92,7 @@ func (t *Tracker) Pressed() bool { return t.pressed }
 func (t *Tracker) Dragging() bool { return t.pressed && t.dragging }
 
 // Cancel abandons the gesture without treating it as either a drag or a click.
-func (t *Tracker) Cancel() { t.pressed, t.dragging, t.fixed = false, false, false }
+func (t *Tracker) Cancel() { t.pressed, t.dragging = false, false }
 
 // confine keeps the stage somewhere it can be got at again. The whole stage is
 // kept on the monitor rather than merely some of it: a stage pushed half off
