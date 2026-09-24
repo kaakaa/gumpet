@@ -186,6 +186,18 @@ func (s *Server) handleListMessages(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleGetConfig(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, s.settingsPage(s.config()))
+}
+
+// settingsPage is everything the settings page builds itself from: the config,
+// and the lists its choices are made from.
+//
+// Loading and saving both answer with it, and it matters that they answer
+// with the same thing. The page rebuilds the monitor and pet pickers from
+// whatever comes back, so a save that answered with the config alone emptied
+// both — every save left "not attached" as the only monitor and "Custom…" as
+// the only pet.
+func (s *Server) settingsPage(cfg config.Config) map[string]any {
 	monitors := s.monitors
 	if monitors == nil {
 		monitors = []display.Monitor{}
@@ -196,15 +208,14 @@ func (s *Server) handleGetConfig(w http.ResponseWriter, r *http.Request) {
 	for _, p := range petsrc.Builtins {
 		pets = append(pets, map[string]string{"name": p.Name, "label": p.Label})
 	}
-
-	writeJSON(w, http.StatusOK, map[string]any{
-		"config":   s.config(),
+	return map[string]any{
+		"config":   cfg,
 		"path":     s.store.Path(),
 		"monitors": monitors,
 		"pets":     pets,
 		// Anything the running process cannot change on the fly.
 		"restart_required": []string{"server.addr", "window.skip_taskbar"},
-	})
+	}
 }
 
 // handlePutConfig validates a whole config, writes it to disk, and hands it to
@@ -249,7 +260,7 @@ func (s *Server) handlePutConfig(w http.ResponseWriter, r *http.Request) {
 	}
 	s.log.Info("saved settings", "path", s.store.Path())
 
-	writeJSON(w, http.StatusOK, map[string]any{"config": cfg, "path": s.store.Path()})
+	writeJSON(w, http.StatusOK, s.settingsPage(cfg))
 }
 
 // handleMessage accepts either a JSON body or, for the convenience of a bare
