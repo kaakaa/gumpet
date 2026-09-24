@@ -14,6 +14,7 @@ import (
 	"net"
 	"net/http"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/kaakaa/gumpet/internal/config"
@@ -23,6 +24,7 @@ import (
 	"github.com/kaakaa/gumpet/internal/message"
 	"github.com/kaakaa/gumpet/internal/petsrc"
 	"github.com/kaakaa/gumpet/internal/settings"
+	"github.com/kaakaa/gumpet/internal/update"
 )
 
 // maxBodyBytes caps a request body. Messages are meant to be short, and the
@@ -46,6 +48,12 @@ type Server struct {
 	monitors []display.Monitor
 	out      chan<- message.Message
 	log      *slog.Logger
+
+	// updater checks for and installs newer releases, and restart is called
+	// once one is in place. Both are nil in a server that offers no updates.
+	updater  Updater
+	restart  func()
+	updating atomic.Bool
 
 	server *http.Server
 	// addr is fixed when Serve binds, so that editing server.addr cannot leave
@@ -91,12 +99,31 @@ func New(store *settings.Store, hist *history.Store, monitors []display.Monitor,
 	mux.HandleFunc("GET /api/v1/config", s.authed(s.handleGetConfig))
 	mux.HandleFunc("PUT /api/v1/config", s.authed(s.handlePutConfig))
 	mux.HandleFunc("GET /api/v1/healthz", s.handleHealth)
+	mux.HandleFunc("GET /api/v1/update", s.authed(s.handleCheckUpdate))
+	mux.HandleFunc("POST /api/v1/update", s.authed(s.handleApplyUpdate))
 
 	s.server = &http.Server{
 		Handler:           mux,
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 	return s
+}
+
+// Updater is what the settings page's update section talks to. It is an
+// interface so that the server can be tested without GitHub.
+type Updater interface {
+	// Version is the running version, which the page shows without asking
+	// anyone anything.
+	Version() string
+	Check(ctx context.Context) (update.Status, error)
+	Apply(ctx context.Context) (update.Status, error)
+}
+
+// SetUpdater lets the settings page check for, and install, a newer release.
+// restart is called once one has been installed, after the answer has gone
+// back to the page.
+func (s *Server) SetUpdater(u Updater, restart func()) {
+	s.updater, s.restart = u, restart
 }
 
 // SetRemarks gives the messages page the record of what the pet has said of
@@ -162,6 +189,74 @@ func (s *Server) page(name string) http.HandlerFunc {
 	}
 }
 
+// Checking asks GitHub, which can be slow; installing downloads a few tens of
+// megabytes. Neither should hang a request for ever.
+const (
+	checkTimeout = 20 * time.Second
+	applyTimeout = 5 * time.Minute
+	// restartDelay lets the answer to the page get out before the process
+	// goes away under it.
+	restartDelay = 500 * time.Millisecond
+)
+
+// handleCheckUpdate compares this version with the latest release. It is the
+// only way gumpet asks GitHub anything, and it only runs when someone asks.
+func (s *Server) handleCheckUpdate(w http.ResponseWriter, r *http.Request) {
+	if s.updater == nil {
+		writeError(w, http.StatusNotFound, "this gumpet cannot update itself")
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), checkTimeout)
+	defer cancel()
+	st, err := s.updater.Check(ctx)
+	if err != nil {
+		writeError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, st)
+}
+
+// handleApplyUpdate installs the latest release and restarts into it.
+func (s *Server) handleApplyUpdate(w http.ResponseWriter, r *http.Request) {
+	if s.updater == nil {
+		writeError(w, http.StatusNotFound, "this gumpet cannot update itself")
+		return
+	}
+	// Two clicks, or two tabs, must not install twice over each other.
+	if !s.updating.CompareAndSwap(false, true) {
+		writeError(w, http.StatusConflict, "an update is already under way")
+		return
+	}
+
+	// The download is not tied to the request: a browser that gives up
+	// waiting must not leave a half-written gumpet behind it.
+	ctx, cancel := context.WithTimeout(context.Background(), applyTimeout)
+	defer cancel()
+	st, err := s.updater.Apply(ctx)
+	if err != nil {
+		s.updating.Store(false)
+		s.log.Error("update failed", "error", err)
+		code := http.StatusBadGateway
+		if errors.Is(err, update.ErrUpToDate) {
+			code = http.StatusConflict
+		}
+		writeError(w, code, err.Error())
+		return
+	}
+
+	s.log.Info("installed an update, restarting", "from", st.Current, "to", st.Latest)
+	writeJSON(w, http.StatusAccepted, map[string]any{"installed": st.Latest, "restarting": true})
+	if f, ok := w.(http.Flusher); ok {
+		f.Flush()
+	}
+	if s.restart != nil {
+		go func() {
+			time.Sleep(restartDelay)
+			s.restart()
+		}()
+	}
+}
+
 // handleListMessages is what the messages page reads: everything gumpet has
 // been sent that is still within the retention settings, newest first.
 func (s *Server) handleListMessages(w http.ResponseWriter, r *http.Request) {
@@ -208,9 +303,14 @@ func (s *Server) settingsPage(cfg config.Config) map[string]any {
 	for _, p := range petsrc.Builtins {
 		pets = append(pets, map[string]string{"name": p.Name, "label": p.Label})
 	}
+	version := ""
+	if s.updater != nil {
+		version = s.updater.Version()
+	}
 	return map[string]any{
 		"config":   cfg,
 		"path":     s.store.Path(),
+		"version":  version,
 		"monitors": monitors,
 		"pets":     pets,
 		// Anything the running process cannot change on the fly.

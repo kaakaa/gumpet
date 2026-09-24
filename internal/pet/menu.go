@@ -93,6 +93,14 @@ func (g *Game) buildMenu() *menu {
 			closes: true,
 			action: func() error { return browser.Open("http://" + cfg.Server.Addr + "/messages") },
 		},
+		// Choosing this is asking, so the page checks as soon as it opens. It
+		// is the only thing that makes gumpet ask GitHub anything.
+		menuItem{
+			label:  "Updates…",
+			detail: "browser",
+			closes: true,
+			action: func() error { return browser.Open("http://" + cfg.Server.Addr + "/#updates") },
+		},
 		menuItem{
 			label:  "Pet",
 			detail: petLabel(cfg.Pet.Source),
