@@ -68,6 +68,7 @@
   nav a:hover { text-decoration: underline; }
   h1 { margin: 0; font-size: 22px; letter-spacing: -0.01em; }
   h1 span { color: var(--muted); font-weight: 400; }
+  .path .running:not(:empty) { margin-right: 12px; color: var(--ink); }
   .path {
     margin: 6px 0 0;
     color: var(--muted);
@@ -201,11 +202,6 @@
   .note.err { background: var(--err-bg); color: var(--err-ink); }
 
   .inline { display: flex; gap: 8px; max-width: 340px; }
-  .version {
-    align-self: center;
-    font: 13px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    white-space: nowrap;
-  }
   .inline input { flex: 1; }
   .inline button { padding: 7px 14px; }
 </style>
@@ -215,7 +211,7 @@
   <header>
     <div>
       <h1>gumpet <span data-i18n>settings</span></h1>
-      <p class="path" id="path"></p>
+      <p class="path"><span class="running" id="version"></span><span id="path"></span></p>
     </div>
     <nav>
       <!-- Each language is named in itself, so it is readable to whoever wants
@@ -599,16 +595,15 @@
     <section id="updates">
       <h2 data-i18n>Updates</h2>
       <div class="row">
-        <label for="update-check" data-i18n>This version</label>
-        <div class="inline">
-          <code class="version" id="update-current"></code>
-          <button type="button" class="secondary" id="update-check" data-i18n>Check for updates</button>
+        <label for="update-check" data-i18n>Check for a new version</label>
+        <div>
+          <button type="button" class="secondary" id="update-check" data-i18n>Check now</button>
         </div>
         <p class="hint" data-i18n>gumpet asks GitHub only when you press this, and never on its own.</p>
         <p class="hint" id="update-result" aria-live="polite"></p>
       </div>
       <div class="row" id="update-row" hidden>
-        <label for="update-apply" data-i18n>New version</label>
+        <label for="update-apply" data-i18n>Update</label>
         <div>
           <button type="button" id="update-apply"></button>
         </div>
@@ -761,10 +756,10 @@
       "When set, every API request must present it.": "設定すると、すべての API 呼び出しがこれを示す必要があります。",
 
       "Updates": "アップデート",
-      "This version": "この版",
-      "Check for updates": "確認する",
+      "Check for a new version": "新しい版の確認",
+      "Check now": "今すぐ確認",
       "gumpet asks GitHub only when you press this, and never on its own.": "gumpet が GitHub に問い合わせるのは、これを押したときだけです。自分から確認することはありません。",
-      "New version": "新しい版",
+      "Update": "更新",
       "Asking GitHub…": "GitHub に問い合わせています…",
       "{0} is out.": "{0} が出ています。",
       "Update to {0} and restart": "{0} に更新して再起動",
@@ -1114,7 +1109,7 @@
     $("path").textContent = data.path;
     fillMonitors(data.monitors, loaded.stage.display);
     fillPets(data.pets);
-    $("update-current").textContent = data.version || "?";
+    $("version").textContent = data.version || "";
     restartRequired = !!(data.restart_required && data.restart_required.length);
     if (restartRequired) { markRestart(); }
     fill(loaded);
