@@ -11,6 +11,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/kaakaa/gumpet/internal/feed"
+	"github.com/kaakaa/gumpet/internal/lang"
 	"github.com/kaakaa/gumpet/internal/quiet"
 )
 
@@ -90,6 +91,10 @@ var Modes = []Mode{ModeAlways, ModeFaded, ModeOnMessage}
 
 // Config is the whole of gumpet's settings.
 type Config struct {
+	// Language is what the pet's own words are in: its menu, and what it
+	// composes itself. "auto" follows the system; "en" and "ja" fix it. What
+	// the pet is sent is never translated.
+	Language string   `yaml:"language" json:"language"`
 	Server   Server   `yaml:"server" json:"server"`
 	Window   Window   `yaml:"window" json:"window"`
 	Stage    Stage    `yaml:"stage" json:"stage"`
@@ -337,6 +342,9 @@ func (h History) Retention() time.Duration {
 // Default returns the settings gumpet uses before anyone changes anything.
 func Default() Config {
 	return Config{
+		// Follow the system: a pet on a Japanese Mac speaks Japanese without
+		// being told to.
+		Language: lang.Auto,
 		Server: Server{
 			Addr:  "127.0.0.1:8787",
 			Token: "",
@@ -431,6 +439,9 @@ func (c Config) PetOpacity(hasMessage, menuOpen bool) float64 {
 // Validate reports the first setting that gumpet cannot work with. Its messages
 // are shown to the user by the settings page, so they name the field.
 func (c Config) Validate() error {
+	if !lang.Valid(c.Language) {
+		return fmt.Errorf("language must be one of %s, got %q", strings.Join(lang.Settings, ", "), c.Language)
+	}
 	if c.Server.Addr == "" {
 		return fmt.Errorf("server.addr must not be empty")
 	}

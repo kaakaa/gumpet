@@ -56,19 +56,20 @@ type menu struct {
 // values on the right are never stale.
 func (g *Game) buildMenu() *menu {
 	cfg := g.cfg
+	tr := g.tr
 	m := &menu{hover: -1}
 
 	m.items = append(m.items,
 		menuItem{label: "gumpet " + g.version, detail: cfg.Server.Addr},
 		menuItem{
-			label:  "Say something",
-			detail: "test",
+			label:  tr("Say something"),
+			detail: tr("test"),
 			rule:   true,
 			closes: true,
 			action: func() error {
 				now := time.Now()
 				msg := message.Message{
-					Text:  "Hello! " + now.Format("15:04:05"),
+					Text:  tr("Hello!") + " " + now.Format("15:04:05"),
 					Level: message.LevelInfo,
 					At:    now,
 				}
@@ -80,30 +81,30 @@ func (g *Game) buildMenu() *menu {
 			},
 		},
 		menuItem{
-			label:  "Settings…",
-			detail: "browser",
+			label:  tr("Settings…"),
+			detail: tr("browser"),
 			closes: true,
 			action: func() error { return browser.Open("http://" + cfg.Server.Addr + "/") },
 		},
 		// The messages page is where a balloon that went by too fast can be
 		// read again, and the moment to want that is while looking at the pet.
 		menuItem{
-			label:  "Messages…",
-			detail: "browser",
+			label:  tr("Messages…"),
+			detail: tr("browser"),
 			closes: true,
 			action: func() error { return browser.Open("http://" + cfg.Server.Addr + "/messages") },
 		},
 		// Choosing this is asking, so the page checks as soon as it opens. It
 		// is the only thing that makes gumpet ask GitHub anything.
 		menuItem{
-			label:  "Updates…",
-			detail: "browser",
+			label:  tr("Updates…"),
+			detail: tr("browser"),
 			closes: true,
 			action: func() error { return browser.Open("http://" + cfg.Server.Addr + "/#updates") },
 		},
 		menuItem{
-			label:  "Pet",
-			detail: petLabel(cfg.Pet.Source),
+			label:  tr("Pet"),
+			detail: petLabel(tr, cfg.Pet.Source),
 			rule:   true,
 			action: func() error {
 				return g.store.Update(func(c *config.Config) {
@@ -112,8 +113,8 @@ func (g *Game) buildMenu() *menu {
 			},
 		},
 		menuItem{
-			label:  "Walk",
-			detail: string(cfg.Behavior.Roam),
+			label:  tr("Walk"),
+			detail: roamLabel(tr, cfg.Behavior.Roam),
 			rule:   true,
 			action: func() error {
 				return g.store.Update(func(c *config.Config) {
@@ -122,8 +123,8 @@ func (g *Game) buildMenu() *menu {
 			},
 		},
 		menuItem{
-			label:  "Roam the whole screen",
-			detail: onOff(cfg.Stage.Fullscreen),
+			label:  tr("Roam the whole screen"),
+			detail: onOff(tr, cfg.Stage.Fullscreen),
 			action: func() error {
 				return g.store.Update(func(c *config.Config) {
 					c.Stage.Fullscreen = !c.Stage.Fullscreen
@@ -131,8 +132,8 @@ func (g *Game) buildMenu() *menu {
 			},
 		},
 		menuItem{
-			label:  "Always on top",
-			detail: onOff(cfg.Window.AlwaysOnTop),
+			label:  tr("Always on top"),
+			detail: onOff(tr, cfg.Window.AlwaysOnTop),
 			action: func() error {
 				return g.store.Update(func(c *config.Config) {
 					c.Window.AlwaysOnTop = !c.Window.AlwaysOnTop
@@ -140,8 +141,8 @@ func (g *Game) buildMenu() *menu {
 			},
 		},
 		menuItem{
-			label:  "When idle",
-			detail: idleLabel(cfg.Behavior.Mode),
+			label:  tr("When idle"),
+			detail: idleLabel(tr, cfg.Behavior.Mode),
 			action: func() error {
 				return g.store.Update(func(c *config.Config) {
 					c.Behavior.Mode = nextMode(c.Behavior.Mode)
@@ -149,7 +150,7 @@ func (g *Game) buildMenu() *menu {
 			},
 		},
 		menuItem{
-			label:  "Quit",
+			label:  tr("Quit"),
 			rule:   true,
 			closes: true,
 			action: func() error { return ebiten.Termination },
@@ -533,25 +534,42 @@ func nextPet(source string) string {
 }
 
 // petLabel names what is showing, for the menu's right-hand column.
-func petLabel(source string) string {
+//
+// The bundled pets' names are names, and stay as they are in every language.
+func petLabel(tr func(string) string, source string) string {
 	if source == "" {
 		return petsrc.Builtins[0].Label
 	}
 	if p, ok := petsrc.BuiltinNamed(source); ok {
 		return p.Label
 	}
-	return "custom"
+	return tr("custom")
 }
 
 // idleLabel says what the pet does with itself between messages.
-func idleLabel(m config.Mode) string {
+func idleLabel(tr func(string) string, m config.Mode) string {
 	switch m {
 	case config.ModeFaded:
-		return "fade"
+		return tr("fade")
 	case config.ModeOnMessage:
-		return "hide"
+		return tr("hide")
 	default:
-		return "stay"
+		return tr("stay")
+	}
+}
+
+// roamLabel names a way of roaming. In English it is the setting's own value,
+// as it always was; other languages say what it means.
+func roamLabel(tr func(string) string, r config.Roam) string {
+	switch r {
+	case config.RoamNone:
+		return tr("none")
+	case config.RoamPerimeter:
+		return tr("perimeter")
+	case config.RoamWander:
+		return tr("wander")
+	default:
+		return tr("horizontal")
 	}
 }
 
@@ -573,9 +591,9 @@ func nextRoam(r config.Roam) config.Roam {
 	return config.RoamHorizontal
 }
 
-func onOff(b bool) string {
+func onOff(tr func(string) string, b bool) string {
 	if b {
-		return "on"
+		return tr("on")
 	}
-	return "off"
+	return tr("off")
 }

@@ -3,6 +3,8 @@ package quiet
 import (
 	"testing"
 	"time"
+
+	"github.com/kaakaa/gumpet/internal/lang"
 )
 
 // at builds a time of day on an arbitrary date, in UTC so that the test reads
@@ -193,8 +195,18 @@ func TestSummaryIsOneSentenceWithWhereToRead(t *testing.T) {
 		{12, "12 messages arrived while it was quiet.\nhttp://127.0.0.1:8765/messages"},
 	}
 	for _, c := range cases {
-		if got := Summary(c.n, "http://127.0.0.1:8765/messages"); got != c.want {
+		if got := Summary(c.n, "http://127.0.0.1:8765/messages", lang.English.T); got != c.want {
 			t.Errorf("Summary(%d) = %q, want %q", c.n, got, c.want)
 		}
+	}
+}
+
+// The summary is the pet's own sentence, so it is said in the pet's language;
+// the link to the page is left as it is.
+func TestSummaryInJapanese(t *testing.T) {
+	got := Summary(12, "http://127.0.0.1:8765/messages", lang.Japanese.T)
+	want := "静かにしている間に 12 件のメッセージが届きました。\nhttp://127.0.0.1:8765/messages"
+	if got != want {
+		t.Errorf("Summary = %q, want %q", got, want)
 	}
 }
