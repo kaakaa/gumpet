@@ -66,6 +66,7 @@
   nav select { width: auto; max-width: none; padding: 4px 8px; font-size: 13px; }
   nav a { color: var(--accent); text-decoration: none; font-weight: 500; }
   nav a:hover { text-decoration: underline; }
+  .title { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
   h1 { margin: 0; font-size: 22px; letter-spacing: -0.01em; }
   h1 span { color: var(--muted); font-weight: 400; }
   .path .running:not(:empty) { margin-right: 12px; color: var(--ink); }
@@ -160,6 +161,7 @@
     font-weight: 600;
     cursor: pointer;
   }
+  button.small { padding: 4px 11px; font-size: 12.5px; }
   button.secondary {
     background: var(--card);
     color: var(--ink);
@@ -191,6 +193,14 @@
   }
   .bar .status { color: var(--muted); font-size: 13px; }
 
+  .note.update {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    background: var(--card);
+    border: 1px solid var(--line);
+  }
   .note {
     padding: 10px 13px;
     border-radius: 8px;
@@ -210,7 +220,12 @@
 <main>
   <header>
     <div>
-      <h1>gumpet <span data-i18n>settings</span></h1>
+      <div class="title">
+        <h1>gumpet <span data-i18n>settings</span></h1>
+        <!-- Beside the title because it is about this gumpet, not one of its
+             settings. Hidden when the server offers no updates. -->
+        <button type="button" class="secondary small" id="update-check" data-i18n hidden>Check for updates</button>
+      </div>
       <p class="path"><span class="running" id="version"></span><span id="path"></span></p>
     </div>
     <nav>
@@ -231,6 +246,12 @@
       <input type="text" id="token-input" placeholder="server.token" autocomplete="off">
       <button type="button" id="token-save" data-i18n>Unlock</button>
     </div>
+  </div>
+
+  <div class="note update" id="updates" hidden>
+    <span id="update-result" aria-live="polite"></span>
+    <button type="button" class="small" id="update-apply" hidden></button>
+    <a id="update-notes" target="_blank" rel="noopener noreferrer" hidden></a>
   </div>
 
   <div class="note" id="banner" hidden></div>
@@ -592,24 +613,6 @@
       </div>
     </section>
 
-    <section id="updates">
-      <h2 data-i18n>Updates</h2>
-      <div class="row">
-        <label for="update-check" data-i18n>Check for a new version</label>
-        <div>
-          <button type="button" class="secondary" id="update-check" data-i18n>Check now</button>
-        </div>
-        <p class="hint" data-i18n>gumpet asks GitHub only when you press this, and never on its own.</p>
-        <p class="hint" id="update-result" aria-live="polite"></p>
-      </div>
-      <div class="row" id="update-row" hidden>
-        <label for="update-apply" data-i18n>Update</label>
-        <div>
-          <button type="button" id="update-apply"></button>
-        </div>
-        <p class="hint"><a id="update-notes" target="_blank" rel="noopener noreferrer"></a></p>
-      </div>
-    </section>
   </form>
 </main>
 
@@ -755,11 +758,7 @@
       "Token": "トークン",
       "When set, every API request must present it.": "設定すると、すべての API 呼び出しがこれを示す必要があります。",
 
-      "Updates": "アップデート",
-      "Check for a new version": "新しい版の確認",
-      "Check now": "今すぐ確認",
-      "gumpet asks GitHub only when you press this, and never on its own.": "gumpet が GitHub に問い合わせるのは、これを押したときだけです。自分から確認することはありません。",
-      "Update": "更新",
+      "Check for updates": "アップデートを確認",
       "Asking GitHub…": "GitHub に問い合わせています…",
       "{0} is out.": "{0} が出ています。",
       "Update to {0} and restart": "{0} に更新して再起動",
@@ -1110,6 +1109,8 @@
     fillMonitors(data.monitors, loaded.stage.display);
     fillPets(data.pets);
     $("version").textContent = data.version || "";
+    // No version means the server has no updater to ask.
+    $("update-check").hidden = !data.version;
     restartRequired = !!(data.restart_required && data.restart_required.length);
     if (restartRequired) { markRestart(); }
     fill(loaded);
@@ -1135,7 +1136,6 @@
       adopt(data);
       if (location.hash === "#updates" && !checkedOnArrival) {
         checkedOnArrival = true;
-        $("updates").scrollIntoView();
         checkUpdates();
       }
     }).catch(function (err) {
@@ -1161,29 +1161,32 @@
     });
   });
 
-  // The update section asks the server, which asks GitHub. Nothing here runs
-  // unless someone presses a button or arrives at #updates.
+  // The update check asks the server, which asks GitHub. Nothing here runs
+  // unless someone presses the button beside the title or arrives at
+  // #updates, which is where the pet's menu sends them.
   var latestRelease = "";
 
   function checkUpdates() {
     var result = $("update-result");
+    $("updates").hidden = false;
+    $("update-apply").hidden = true;
+    $("update-notes").hidden = true;
     $("update-check").disabled = true;
-    $("update-row").hidden = true;
     dyn(result, "Asking GitHub…");
     request("GET", "api/v1/update").then(function (st) {
       latestRelease = st.latest;
       if (st.available && st.installable) {
         dyn(result, "{0} is out.", st.latest);
         dyn($("update-apply"), "Update to {0} and restart", st.latest);
+        $("update-apply").disabled = false;
+        $("update-apply").hidden = false;
         // The link is to the release's page and nowhere else.
         var notes = $("update-notes");
-        notes.hidden = !/^https:\/\/github\.com\//.test(st.url || "");
-        if (!notes.hidden) {
+        if (/^https:\/\/github\.com\//.test(st.url || "")) {
           notes.href = st.url;
           dyn(notes, "What changed in {0}", st.latest);
+          notes.hidden = false;
         }
-        $("update-apply").disabled = false;
-        $("update-row").hidden = false;
       } else if (st.reason === "source-build") {
         dyn(result, "{0} is out, but this copy was built from source. Update it with git pull and make.", st.latest);
       } else if (st.reason === "no-build-for-platform") {
