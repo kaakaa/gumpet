@@ -242,6 +242,51 @@ func TestPutConfigSavesAndPublishes(t *testing.T) {
 	}
 }
 
+// The settings page rebuilds its monitor and pet pickers from whatever a save
+// answers with. A save that answered with the config alone emptied both, so
+// every save left "not attached" as the only monitor and "Custom…" as the
+// only pet. Loading and saving must answer with the same things.
+func TestASaveAnswersWithEverythingAPageLoadDoes(t *testing.T) {
+	s, _, _ := newTestServerWithConfig(t, config.Default(), 1)
+
+	keys := func(rec *httptest.ResponseRecorder) map[string]json.RawMessage {
+		t.Helper()
+		var body map[string]json.RawMessage
+		if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
+			t.Fatalf("decode: %v", err)
+		}
+		return body
+	}
+	loaded := keys(do(t, s, http.MethodGet, "/api/v1/config", "", "", nil))
+
+	rec := do(t, s, http.MethodPut, "/api/v1/config", "application/json", `{"behavior":{"speed":10}}`, nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d (%s)", rec.Code, http.StatusOK, rec.Body)
+	}
+	saved := keys(rec)
+
+	for key, want := range loaded {
+		got, ok := saved[key]
+		if !ok {
+			t.Errorf("a save answers without %q, which the page rebuilds from", key)
+			continue
+		}
+		// The config itself has just changed; everything else must not.
+		if key != "config" && string(got) != string(want) {
+			t.Errorf("%s after a save = %s, want what a load gives: %s", key, got, want)
+		}
+	}
+
+	var monitors []display.Monitor
+	if err := json.Unmarshal(saved["monitors"], &monitors); err != nil || len(monitors) != len(testMonitors) {
+		t.Errorf("a save lists %d monitors (%v), want the %d attached", len(monitors), err, len(testMonitors))
+	}
+	var pets []map[string]string
+	if err := json.Unmarshal(saved["pets"], &pets); err != nil || len(pets) == 0 {
+		t.Errorf("a save lists no bundled pets (%v), so the picker would offer only Custom…", err)
+	}
+}
+
 func TestPutConfigRejectsInvalidSettings(t *testing.T) {
 	s, _, updates := newTestServerWithConfig(t, config.Default(), 1)
 
