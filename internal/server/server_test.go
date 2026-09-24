@@ -961,3 +961,25 @@ func TestEveryOfferedPetIsAValidSetting(t *testing.T) {
 		}
 	}
 }
+
+// A page that hides things with the hidden attribute needs a rule that makes
+// it stick. Without one, any class setting display — .row is a grid — beats
+// the browser's own [hidden] rule, and the element shows anyway. That is how
+// the settings page came to show an empty "update" button and a path field
+// for a pet that needed none, while every check of the hidden property said
+// they were hidden.
+func TestPagesThatHideThingsMakeHiddenStick(t *testing.T) {
+	for _, name := range []string{"ui/settings.html", "ui/messages.html"} {
+		body, err := ui.ReadFile(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		page := string(body)
+		if !strings.Contains(page, " hidden") && !strings.Contains(page, ".hidden") {
+			continue
+		}
+		if !strings.Contains(page, "[hidden] { display: none !important; }") {
+			t.Errorf("%s hides things with the hidden attribute but has no [hidden] rule to make it stick", name)
+		}
+	}
+}
