@@ -277,46 +277,31 @@ func TestAGestureDrivenFromPressedThatNeverMovesIsAClick(t *testing.T) {
 	}
 }
 
-// A pet roaming the whole screen cannot be dragged, but it can still be
-// clicked. The first version of dragging started no gesture at all in that
-// case, and because the menu opens when a gesture ends, the menu could not be
-// opened. This drives it the way the caller does.
-func TestAPressOnAFixedStageIsAlwaysAClick(t *testing.T) {
-	var d Tracker
-	stage := stageAt(0, 0)
-	monitor := Rect{W: 1920, H: 1080}
+// On a stage that fills the monitor there is no stage to move, so the pet
+// itself is carried: the tracker is pressed on the pet and bounded by the
+// stage. This is how the pet calls it. The pet must follow the cursor, stay
+// on the monitor however far the cursor goes, and a press that goes nowhere
+// must still be a click, which is what opens the menu.
+func TestCarryingThePetAcrossAFullScreenStage(t *testing.T) {
+	stage := Rect{W: 3840, H: 2160}
+	pet := Rect{X: 1000, Y: 1000, W: 200, H: 200}
 
-	d.PressFixed(500, 500)
-	if !d.Pressed() {
-		t.Fatal("the press was not heard, so letting go could never be a click")
+	var d Tracker
+	d.Press(1100, 1100, pet)
+	x, y, dragging := d.Move(1100+500, 1100-300, pet, stage)
+	if !dragging || x != 1500 || y != 700 {
+		t.Errorf("carried to (%v, %v) dragging=%v, want (1500, 700)", x, y, dragging)
 	}
-	// Even a cursor that travels a long way does not make it a drag.
-	for i := 1; i <= 200; i++ {
-		x, y, dragging := d.Move(500+float64(i), 500+float64(i), stage, monitor)
-		if dragging {
-			t.Fatalf("a fixed stage started a drag after %d pixels", i)
-		}
-		if x != stage.X || y != stage.Y {
-			t.Fatalf("a fixed stage moved to (%v, %v)", x, y)
-		}
+	// Far past the right edge: the pet stops at the edge, whole.
+	if x, _, _ := d.Move(99999, 1100, pet, stage); x != stage.W-pet.W {
+		t.Errorf("x = %v past the edge, want %v", x, stage.W-pet.W)
 	}
+	if !d.Release() {
+		t.Error("a carry was reported as a click; the menu would open on letting go")
+	}
+
+	d.Press(1100, 1100, pet)
 	if d.Release() {
-		t.Error("Release called it a drag; the menu would not open")
-	}
-}
-
-// A fixed press must not leak into the next gesture: once the stage can move
-// again, dragging it must work.
-func TestAFixedPressDoesNotStopTheNextDrag(t *testing.T) {
-	var d Tracker
-	stage := stageAt(100, 100)
-	monitor := Rect{W: 1920, H: 1080}
-
-	d.PressFixed(500, 500)
-	d.Release()
-
-	d.Press(500, 500, stage)
-	if _, _, dragging := d.Move(500+2*Threshold, 500, stage, monitor); !dragging {
-		t.Error("a normal press after a fixed one would not drag")
+		t.Error("a press that went nowhere was reported as a drag; the menu would not open")
 	}
 }

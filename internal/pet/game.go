@@ -357,7 +357,11 @@ func (g *Game) stage() layout.Rect {
 // holds still while its menu is open, so the rows stay under the cursor, and
 // while someone is plainly reaching for it with the cursor.
 func (g *Game) canRoam() bool {
-	return g.menu == nil && !g.hovered
+	// A pet being held does not walk off. The cursor-over-the-pet check
+	// usually covers that, but it lapses for a cursor held still, and a pet
+	// that wandered out from under a held button would snap back as soon as
+	// the cursor moved again.
+	return g.menu == nil && !g.hovered && !g.drag.Pressed()
 }
 
 // drainUpdates applies any settings saved since the last tick, whether they
