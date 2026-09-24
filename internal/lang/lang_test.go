@@ -75,8 +75,11 @@ func saidInSource(t *testing.T) map[string][]string {
 // menu, and nothing else would ever report it.
 func TestEverythingThePetSaysIsTranslated(t *testing.T) {
 	said := saidInSource(t)
-	// A scanner that matched nothing would pass for the worst reason.
-	if len(said) < 20 {
+	// A scanner that matched nothing would pass for the worst reason. The
+	// floor is well under what the pet says — the menu's five rows and the
+	// four ways of walking are already nine — so trimming the menu does not
+	// trip it, and a scanner that found nothing always does.
+	if len(said) < 8 {
 		t.Fatalf("found only %d words the pet says; the scanner is broken, not the pet", len(said))
 	}
 	var missing []string
