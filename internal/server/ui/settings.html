@@ -194,6 +194,11 @@
   .note.err { background: var(--err-bg); color: var(--err-ink); }
 
   .inline { display: flex; gap: 8px; max-width: 340px; }
+  .version {
+    align-self: center;
+    font: 13px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    white-space: nowrap;
+  }
   .inline input { flex: 1; }
   .inline button { padding: 7px 14px; }
 </style>
@@ -569,6 +574,26 @@
         <p class="hint" data-i18n>When set, every API request must present it.</p>
       </div>
     </section>
+
+    <section id="updates">
+      <h2 data-i18n>Updates</h2>
+      <div class="row">
+        <label for="update-check" data-i18n>This version</label>
+        <div class="inline">
+          <code class="version" id="update-current"></code>
+          <button type="button" class="secondary" id="update-check" data-i18n>Check for updates</button>
+        </div>
+        <p class="hint" data-i18n>gumpet asks GitHub only when you press this, and never on its own.</p>
+        <p class="hint" id="update-result" aria-live="polite"></p>
+      </div>
+      <div class="row" id="update-row" hidden>
+        <label for="update-apply" data-i18n>New version</label>
+        <div>
+          <button type="button" id="update-apply"></button>
+        </div>
+        <p class="hint"><a id="update-notes" target="_blank" rel="noopener noreferrer"></a></p>
+      </div>
+    </section>
   </form>
 </main>
 
@@ -711,6 +736,25 @@
       "Token": "トークン",
       "When set, every API request must present it.": "設定すると、すべての API 呼び出しがこれを示す必要があります。",
 
+      "Updates": "アップデート",
+      "This version": "この版",
+      "Check for updates": "確認する",
+      "gumpet asks GitHub only when you press this, and never on its own.": "gumpet が GitHub に問い合わせるのは、これを押したときだけです。自分から確認することはありません。",
+      "New version": "新しい版",
+      "Asking GitHub…": "GitHub に問い合わせています…",
+      "{0} is out.": "{0} が出ています。",
+      "Update to {0} and restart": "{0} に更新して再起動",
+      "What changed in {0}": "{0} の変更点",
+      "{0} is out, but this copy was built from source. Update it with git pull and make.": "{0} が出ていますが、これはソースからビルドされたものです。git pull と make で更新してください。",
+      "{0} is out, but no release is built for this machine. Build it from source.": "{0} が出ていますが、この環境向けのリリースはありません。ソースからビルドしてください。",
+      "This copy has no version, so it cannot tell whether it is out of date. The latest release is {0}.": "この gumpet には版が付いていないので、古いかどうか判断できません。最新のリリースは {0} です。",
+      "This is the latest version.": "最新の版です。",
+      "Could not ask GitHub: {0}": "GitHub に問い合わせられませんでした: {0}",
+      "Downloading {0}…": "{0} をダウンロードしています…",
+      "Installed {0}. gumpet is restarting…": "{0} を入れました。gumpet を再起動しています…",
+      "Could not update: {0}": "更新できませんでした: {0}",
+      "gumpet has not come back after a minute. It may need starting by hand.": "1分たっても gumpet が戻ってきません。手で起動し直す必要があるかもしれません。",
+
       "Save": "保存",
       "Revert": "元に戻す",
 
@@ -781,7 +825,8 @@
   // said again in another language without rebuilding whatever holds it.
   function dyn(el, en, arg) {
     el.setAttribute("data-i18n-dyn", en);
-    if (arg !== undefined) { el.setAttribute("data-i18n-arg", arg); }
+    // An element said again with no argument must not keep the last one.
+    if (arg !== undefined) { el.setAttribute("data-i18n-arg", arg); } else { el.removeAttribute("data-i18n-arg"); }
     redyn(el);
   }
 
@@ -1045,6 +1090,7 @@
     $("path").textContent = data.path;
     fillMonitors(data.monitors, loaded.stage.display);
     fillPets(data.pets);
+    $("update-current").textContent = data.version || "?";
     restartRequired = !!(data.restart_required && data.restart_required.length);
     if (restartRequired) { markRestart(); }
     fill(loaded);
@@ -1060,8 +1106,20 @@
     $("token-input").focus();
   }
 
+  // Arriving at #updates is asking — the pet's menu sends people here — so the
+  // check runs straight away. Once: the page reloads itself here after an
+  // update, and should then only say it is up to date, not loop.
+  var checkedOnArrival = false;
+
   function load() {
-    request("GET", "api/v1/config").then(adopt).catch(function (err) {
+    request("GET", "api/v1/config").then(function (data) {
+      adopt(data);
+      if (location.hash === "#updates" && !checkedOnArrival) {
+        checkedOnArrival = true;
+        $("updates").scrollIntoView();
+        checkUpdates();
+      }
+    }).catch(function (err) {
       if (err.unauthorized) { askForToken(); return; }
       note("err", "Could not load settings", ": " + err.message);
       status("Error");
@@ -1081,6 +1139,82 @@
       if (err.unauthorized) { askForToken(); return; }
       note("err", err.message);
       status("Not saved");
+    });
+  });
+
+  // The update section asks the server, which asks GitHub. Nothing here runs
+  // unless someone presses a button or arrives at #updates.
+  var latestRelease = "";
+
+  function checkUpdates() {
+    var result = $("update-result");
+    $("update-check").disabled = true;
+    $("update-row").hidden = true;
+    dyn(result, "Asking GitHub…");
+    request("GET", "api/v1/update").then(function (st) {
+      latestRelease = st.latest;
+      if (st.available && st.installable) {
+        dyn(result, "{0} is out.", st.latest);
+        dyn($("update-apply"), "Update to {0} and restart", st.latest);
+        // The link is to the release's page and nowhere else.
+        var notes = $("update-notes");
+        notes.hidden = !/^https:\/\/github\.com\//.test(st.url || "");
+        if (!notes.hidden) {
+          notes.href = st.url;
+          dyn(notes, "What changed in {0}", st.latest);
+        }
+        $("update-apply").disabled = false;
+        $("update-row").hidden = false;
+      } else if (st.reason === "source-build") {
+        dyn(result, "{0} is out, but this copy was built from source. Update it with git pull and make.", st.latest);
+      } else if (st.reason === "no-build-for-platform") {
+        dyn(result, "{0} is out, but no release is built for this machine. Build it from source.", st.latest);
+      } else if (st.reason === "dev-build") {
+        dyn(result, "This copy has no version, so it cannot tell whether it is out of date. The latest release is {0}.", st.latest);
+      } else {
+        dyn(result, "This is the latest version.");
+      }
+    }).catch(function (err) {
+      if (err.unauthorized) { askForToken(); return; }
+      dyn(result, "Could not ask GitHub: {0}", err.message);
+    }).then(function () {
+      $("update-check").disabled = false;
+    });
+  }
+
+  // waitForRestart asks every second until the gumpet answering is the one it
+  // was updated to, then reloads the page from it. The old one keeps answering
+  // for a moment, and in between nothing answers at all; both just mean wait.
+  function waitForRestart(want, since) {
+    if (Date.now() - since > 60000) {
+      dyn($("update-result"), "gumpet has not come back after a minute. It may need starting by hand.");
+      return;
+    }
+    setTimeout(function () {
+      request("GET", "api/v1/config").then(function (data) {
+        if (data.version === want) { location.reload(); return; }
+        waitForRestart(want, since);
+      }).catch(function () {
+        waitForRestart(want, since);
+      });
+    }, 1000);
+  }
+
+  $("update-check").addEventListener("click", checkUpdates);
+
+  $("update-apply").addEventListener("click", function () {
+    var result = $("update-result");
+    $("update-apply").disabled = true;
+    $("update-check").disabled = true;
+    dyn(result, "Downloading {0}…", latestRelease);
+    request("POST", "api/v1/update").then(function () {
+      dyn(result, "Installed {0}. gumpet is restarting…", latestRelease);
+      waitForRestart(latestRelease, Date.now());
+    }).catch(function (err) {
+      if (err.unauthorized) { askForToken(); return; }
+      dyn(result, "Could not update: {0}", err.message);
+      $("update-apply").disabled = false;
+      $("update-check").disabled = false;
     });
   });
 

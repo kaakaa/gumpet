@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"sync/atomic"
 	"syscall"
 
 	"github.com/hajimehoshi/ebiten/v2"
@@ -19,6 +20,7 @@ import (
 	"github.com/kaakaa/gumpet/internal/petpack"
 	"github.com/kaakaa/gumpet/internal/server"
 	"github.com/kaakaa/gumpet/internal/settings"
+	"github.com/kaakaa/gumpet/internal/update"
 )
 
 // version is stamped in by the build; see the Makefile.
@@ -32,10 +34,25 @@ const ticksPerSecond = 30
 // loop, which drains the channel every tick.
 const inboxSize = 64
 
+// restartRequested is set once an update has been installed. The restart
+// itself waits until run has returned: the pet's window closed and, above all,
+// the server let go of its address, which the new process has to take.
+var restartRequested atomic.Bool
+
 func main() {
 	if err := run(); err != nil {
 		fmt.Fprintf(os.Stderr, "gumpet: %v\n", err)
 		os.Exit(1)
+	}
+	if restartRequested.Load() {
+		exe, err := os.Executable()
+		if err == nil {
+			err = update.Restart(exe)
+		}
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "gumpet: installed an update but could not restart into it: %v\n", err)
+			os.Exit(1)
+		}
 	}
 }
 
@@ -88,6 +105,19 @@ func run() error {
 	monitors := pet.Monitors()
 	srv := server.New(store, hist, monitors, inbox, log)
 	srv.SetRemarks(remarks)
+	if exe, err := os.Executable(); err != nil {
+		log.Warn("updates are off: cannot tell where this gumpet is", "error", err)
+	} else {
+		// What an update on Windows had to leave behind: the old executable,
+		// which could not be deleted while it was running.
+		update.Cleanup(exe)
+		srv.SetUpdater(update.New(version, exe), func() {
+			restartRequested.Store(true)
+			// Ending the context ends both the game loop and the server,
+			// the same way Ctrl-C does.
+			stop()
+		})
+	}
 
 	// Claim the port before opening a window. gumpet exists to be sent
 	// messages, so one that cannot listen has nothing to offer: starting

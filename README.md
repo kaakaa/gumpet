@@ -43,6 +43,22 @@ make windows          # cross-compile to bin/windows-amd64/, from any host
 Ebitengine needs no cgo on Windows, so `GOOS=windows go build` works straight
 from macOS or Linux. Go 1.25 or later is required.
 
+### Updating
+
+A copy installed from the releases page can update itself. Choose
+**Updates…** from the pet's menu, or press **Check for updates** at the bottom
+of the settings page. If a newer release is out, one more click downloads it,
+checks it against the release's `SHA256SUMS`, puts it in place of the running
+`gumpet` (and of `gumpetctl`, if it sits in the same folder) and restarts.
+
+gumpet only asks GitHub when you press one of those; it never checks on its
+own. A build from source — `make build` or `go install` — reports whether a
+newer release exists but leaves updating it to git, and a copy in a folder you
+cannot write to says so before downloading anything.
+
+The checksum proves the download arrived whole, not who made it: it comes from
+the same release as the archive.
+
 ## Use
 
 Start the pet:
