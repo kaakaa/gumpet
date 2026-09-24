@@ -11,7 +11,6 @@ import (
 	"github.com/kaakaa/gumpet/internal/clipboard"
 	"github.com/kaakaa/gumpet/internal/config"
 	"github.com/kaakaa/gumpet/internal/drag"
-	"github.com/kaakaa/gumpet/internal/message"
 	"github.com/kaakaa/gumpet/internal/petsrc"
 	"github.com/kaakaa/gumpet/internal/richtext"
 )
@@ -59,48 +58,24 @@ func (g *Game) buildMenu() *menu {
 	tr := g.tr
 	m := &menu{hover: -1}
 
+	// The menu holds what is worth reaching for while looking at the pet: the
+	// two pages, and the two things people switch on the spot. Everything set
+	// once and left alone lives on the settings page, where there is room to
+	// explain it. A longer menu here was a list nobody read to the end of.
 	m.items = append(m.items,
-		menuItem{label: "gumpet " + g.version, detail: cfg.Server.Addr},
-		menuItem{
-			label:  tr("Say something"),
-			detail: tr("test"),
-			rule:   true,
-			closes: true,
-			action: func() error {
-				now := time.Now()
-				msg := message.Message{
-					Text:  tr("Hello!") + " " + now.Format("15:04:05"),
-					Level: message.LevelInfo,
-					At:    now,
-				}
-				if g.history != nil {
-					msg.ID = g.history.Add(msg).ID
-				}
-				g.enqueue(msg)
-				return nil
-			},
-		},
-		menuItem{
-			label:  tr("Settings…"),
-			detail: tr("browser"),
-			closes: true,
-			action: func() error { return browser.Open("http://" + cfg.Server.Addr + "/") },
-		},
+		menuItem{label: "gumpet " + g.version},
 		// The messages page is where a balloon that went by too fast can be
 		// read again, and the moment to want that is while looking at the pet.
 		menuItem{
 			label:  tr("Messages…"),
-			detail: tr("browser"),
+			rule:   true,
 			closes: true,
 			action: func() error { return browser.Open("http://" + cfg.Server.Addr + "/messages") },
 		},
-		// Choosing this is asking, so the page checks as soon as it opens. It
-		// is the only thing that makes gumpet ask GitHub anything.
 		menuItem{
-			label:  tr("Updates…"),
-			detail: tr("browser"),
+			label:  tr("Settings…"),
 			closes: true,
-			action: func() error { return browser.Open("http://" + cfg.Server.Addr + "/#updates") },
+			action: func() error { return browser.Open("http://" + cfg.Server.Addr + "/") },
 		},
 		menuItem{
 			label:  tr("Pet"),
@@ -115,37 +90,9 @@ func (g *Game) buildMenu() *menu {
 		menuItem{
 			label:  tr("Walk"),
 			detail: roamLabel(tr, cfg.Behavior.Roam),
-			rule:   true,
 			action: func() error {
 				return g.store.Update(func(c *config.Config) {
 					c.Behavior.Roam = nextRoam(c.Behavior.Roam)
-				})
-			},
-		},
-		menuItem{
-			label:  tr("Roam the whole screen"),
-			detail: onOff(tr, cfg.Stage.Fullscreen),
-			action: func() error {
-				return g.store.Update(func(c *config.Config) {
-					c.Stage.Fullscreen = !c.Stage.Fullscreen
-				})
-			},
-		},
-		menuItem{
-			label:  tr("Always on top"),
-			detail: onOff(tr, cfg.Window.AlwaysOnTop),
-			action: func() error {
-				return g.store.Update(func(c *config.Config) {
-					c.Window.AlwaysOnTop = !c.Window.AlwaysOnTop
-				})
-			},
-		},
-		menuItem{
-			label:  tr("When idle"),
-			detail: idleLabel(tr, cfg.Behavior.Mode),
-			action: func() error {
-				return g.store.Update(func(c *config.Config) {
-					c.Behavior.Mode = nextMode(c.Behavior.Mode)
 				})
 			},
 		},
@@ -564,18 +511,6 @@ func petLabel(tr func(string) string, source string) string {
 	return tr("custom")
 }
 
-// idleLabel says what the pet does with itself between messages.
-func idleLabel(tr func(string) string, m config.Mode) string {
-	switch m {
-	case config.ModeFaded:
-		return tr("fade")
-	case config.ModeOnMessage:
-		return tr("hide")
-	default:
-		return tr("stay")
-	}
-}
-
 // roamLabel names a way of roaming. In English it is the setting's own value,
 // as it always was; other languages say what it means.
 func roamLabel(tr func(string) string, r config.Roam) string {
@@ -591,15 +526,6 @@ func roamLabel(tr func(string) string, r config.Roam) string {
 	}
 }
 
-func nextMode(m config.Mode) config.Mode {
-	for i, candidate := range config.Modes {
-		if candidate == m {
-			return config.Modes[(i+1)%len(config.Modes)]
-		}
-	}
-	return config.ModeAlways
-}
-
 func nextRoam(r config.Roam) config.Roam {
 	for i, candidate := range config.Roams {
 		if candidate == r {
@@ -607,11 +533,4 @@ func nextRoam(r config.Roam) config.Roam {
 		}
 	}
 	return config.RoamHorizontal
-}
-
-func onOff(tr func(string) string, b bool) string {
-	if b {
-		return tr("on")
-	}
-	return tr("off")
 }
