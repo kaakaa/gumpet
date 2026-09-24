@@ -232,17 +232,22 @@ the terminal and still know when you are needed.
 
 ## The menu
 
-Clicking the pet opens a menu with:
+Clicking the pet opens a short menu with:
 
-- which gumpet this is, and the address it is listening on
-- **Say something** — a test message, for checking size and placement
-- **Settings…** — opens the settings page in your browser
+- which gumpet this is
+- **Messages…** — opens the messages page in your browser
+- **Settings…** — opens the settings page
+- **Pet** — cycles through the bundled pets
 - **Walk** — cycles through the four roaming styles
-- **Roam the whole screen**, **Always on top** and **Hide until a message** — toggles
 - **Quit**
 
-Changes made here are written to the config file and show up on the settings
-page, and the other way round.
+It holds only what is worth switching while looking at the pet. Everything
+else is on the settings page, which keeps what people change most at the top
+and the rest under **Advanced**. Changes made in either place are written to
+the config file and show up in the other.
+
+The menu speaks the language of the `language` setting — `auto` follows the
+system.
 
 The pet stops walking while the cursor is on it or on one of its balloons, so
 neither is a moving target however fast it is going. The menu closes when you pick something
