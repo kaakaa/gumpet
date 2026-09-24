@@ -16,6 +16,11 @@ const configTemplate = `# gumpet configuration
 # Edit this file directly, or open the settings page with "gumpetctl -settings".
 # Everything except server.addr and window.skip_taskbar applies immediately.
 
+# The language of the pet's menu and of what the pet says itself: "auto"
+# follows the system, "en" and "ja" fix it. Messages it is sent are shown as
+# they were sent, in whatever language they are in.
+language: {{ q .Language }}
+
 server:
   # Where gumpet listens for messages and serves its settings page. Keep this
   # on the loopback interface unless you really want the rest of the network

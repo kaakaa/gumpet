@@ -25,6 +25,7 @@ import (
 	"github.com/kaakaa/gumpet/internal/feed"
 	"github.com/kaakaa/gumpet/internal/history"
 	"github.com/kaakaa/gumpet/internal/hover"
+	"github.com/kaakaa/gumpet/internal/lang"
 	"github.com/kaakaa/gumpet/internal/layout"
 	"github.com/kaakaa/gumpet/internal/message"
 	"github.com/kaakaa/gumpet/internal/petpack"
@@ -125,6 +126,11 @@ type Game struct {
 	// the moment quiet begins can be told from every frame after it.
 	hush     quiet.Hush
 	wasQuiet bool
+	// lang is what the pet's own words are said in. locale is the system's,
+	// found once at startup: asking macOS means running a program, and the
+	// answer does not change while gumpet runs.
+	lang   lang.Lang
+	locale string
 	// localSayings is what the pet says when the feeds have nothing for it:
 	// the file or the bundled list, kept so that falling back does not mean
 	// reading it off disk again.
@@ -199,8 +205,21 @@ func New(o Options) *Game {
 	g.walker.SetJumping(cfg.Behavior.Jump)
 	g.winW, g.winH = int(math.Ceil(g.petWidth())), int(math.Ceil(g.petHeight()))
 	g.setQuietWindow(cfg.Behavior.Quiet)
+	g.locale = lang.Detect()
+	g.setLanguage(cfg.Language)
 	return g
 }
+
+// setLanguage adopts the language setting. Balloons already on screen keep
+// what they said; the menu is rebuilt by applyConfig.
+func (g *Game) setLanguage(setting string) {
+	g.lang = lang.Resolve(setting, func() string { return g.locale })
+}
+
+// tr says one of the pet's own words in its language. Everything gumpet
+// writes for the pet to show goes through here, and a test reads this
+// package's source to find every word said this way.
+func (g *Game) tr(en string) string { return g.lang.T(en) }
 
 // Layout is never called: LayoutF takes precedence and gives us the screen in
 // physical pixels, which keeps the artwork and text sharp on HiDPI displays.
@@ -390,6 +409,9 @@ func (g *Game) applyConfig(cfg config.Config) {
 	if cfg.Behavior.Quiet != old.Behavior.Quiet {
 		g.setQuietWindow(cfg.Behavior.Quiet)
 	}
+	if cfg.Language != old.Language {
+		g.setLanguage(cfg.Language)
+	}
 	g.reshapeWalker()
 	g.panelDirty = true
 	if g.menu != nil {
@@ -454,8 +476,8 @@ func (g *Game) advanceQuiet() {
 	if ended > 0 {
 		g.log.Info("quiet hours end", "held", ended)
 		g.enqueue(message.Message{
-			Title: "While it was quiet",
-			Text:  quiet.Summary(ended, "http://"+g.cfg.Server.Addr+"/messages"),
+			Title: g.tr("While it was quiet"),
+			Text:  quiet.Summary(ended, "http://"+g.cfg.Server.Addr+"/messages", g.tr),
 			Level: message.LevelInfo,
 			At:    time.Now(),
 		})

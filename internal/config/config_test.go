@@ -20,10 +20,11 @@ func TestRenderRoundTrips(t *testing.T) {
 		{
 			name: "everything changed",
 			cfg: Config{
-				Server: Server{Addr: "127.0.0.1:9999", Token: "s3cret"},
-				Window: Window{AlwaysOnTop: false, ClickThrough: false, SkipTaskbar: false},
-				Stage:  Stage{Display: 2, Fullscreen: true, Width: 800, Height: 600, Anchor: AnchorCustom, MarginX: 1, MarginY: 2, X: 30, Y: 40},
-				Pet:    Pet{Source: "/tmp/cat.gif", Scale: 0.75, FPS: 12.5, FlipWhenFacingRight: false, Smooth: SmoothOff},
+				Language: "ja",
+				Server:   Server{Addr: "127.0.0.1:9999", Token: "s3cret"},
+				Window:   Window{AlwaysOnTop: false, ClickThrough: false, SkipTaskbar: false},
+				Stage:    Stage{Display: 2, Fullscreen: true, Width: 800, Height: 600, Anchor: AnchorCustom, MarginX: 1, MarginY: 2, X: 30, Y: 40},
+				Pet:      Pet{Source: "/tmp/cat.gif", Scale: 0.75, FPS: 12.5, FlipWhenFacingRight: false, Smooth: SmoothOff},
 				Behavior: Behavior{Mode: ModeOnMessage, IdleOpacity: 0.2, Roam: RoamWander, Speed: 0, Jump: false,
 					Quiet: Quiet{From: "22:00", To: "08:30"},
 					Chatter: Chatter{Enabled: true, IntervalSec: 90.5, Source: "/tmp/my sayings.txt",
@@ -165,6 +166,8 @@ func TestValidateRejectsBadValues(t *testing.T) {
 		mod  func(*Config)
 	}{
 		{"empty addr", func(c *Config) { c.Server.Addr = "" }},
+		{"a language with no dictionary", func(c *Config) { c.Language = "fr" }},
+		{"an empty language", func(c *Config) { c.Language = "" }},
 		{"unknown anchor", func(c *Config) { c.Stage.Anchor = "middle" }},
 		{"zero width", func(c *Config) { c.Stage.Width = 0 }},
 		{"display counted from zero", func(c *Config) { c.Stage.Display = 0 }},

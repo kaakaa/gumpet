@@ -543,6 +543,20 @@
     <section>
       <h2 data-i18n>Window</h2>
       <div class="row">
+        <label for="pet-language" data-i18n>Pet's language</label>
+        <select id="pet-language" data-path="language">
+          <option value="auto" data-i18n>Automatic</option>
+          <!-- Named in themselves, like the page's own picker at the top. -->
+          <option value="en">English</option>
+          <option value="ja">日本語</option>
+        </select>
+        <p class="hint" data-i18n>
+          The language of the pet's menu and of what it says itself. Automatic
+          follows the system. Messages it is sent are shown as they were sent.
+          This page's own language is the one chosen at the top.
+        </p>
+      </div>
+      <div class="row">
         <label for="on-top" data-i18n>Always on top</label>
         <input type="checkbox" id="on-top" data-path="window.always_on_top">
       </div>
@@ -723,6 +737,9 @@
       "Hours. 0 keeps them until the limit above is reached.": "時間。0 なら、上の件数に達するまで残ります。",
 
       "Window": "ウィンドウ",
+      "Pet's language": "ペットの言語",
+      "Automatic": "自動",
+      "The language of the pet's menu and of what it says itself. Automatic follows the system. Messages it is sent are shown as they were sent. This page's own language is the one chosen at the top.": "ペットのメニューと、ペットが自分から言うことの言語。「自動」ならシステムの言語に合わせます。送られてきたメッセージは送られたとおりに出します。この画面自体の言語は、上で選んだものです。",
       "Always on top": "常に最前面",
       "Click through": "クリックを透かす",
       "Let clicks reach whatever is behind the pet, so it never steals one. Turning this on also means clicking the pet no longer opens its menu.": "ペットの後ろにあるものへクリックを届かせ、ペットがクリックを横取りしないようにします。on にすると、ペットをクリックしてもメニューは開かなくなります。",
