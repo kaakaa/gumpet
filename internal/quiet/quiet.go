@@ -16,6 +16,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/kaakaa/gumpet/internal/lang"
 )
 
 // Window is a stretch of the day, in local time, when the pet stays quiet.
@@ -127,10 +129,14 @@ func (h *Hush) Quiet() bool { return h.quiet }
 // Summary is what the pet says when a quiet stretch ends: how many arrived,
 // and where to read them. It is one sentence however many there were, because
 // a dozen balloons at once is a dozen balloons nobody reads.
-func Summary(n int, messagesPage string) string {
-	noun := "messages"
+//
+// tr says it in the pet's language. The singular is a sentence of its own
+// rather than a word swapped in, because not every language makes the
+// distinction the way English does.
+func Summary(n int, messagesPage string, tr func(string) string) string {
+	tmpl := tr("{0} messages arrived while it was quiet.")
 	if n == 1 {
-		noun = "message"
+		tmpl = tr("1 message arrived while it was quiet.")
 	}
-	return fmt.Sprintf("%d %s arrived while it was quiet.\n%s", n, noun, messagesPage)
+	return lang.Format(tmpl, n) + "\n" + messagesPage
 }
