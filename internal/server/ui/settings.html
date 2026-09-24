@@ -36,6 +36,13 @@
   }
 
   * { box-sizing: border-box; }
+
+  /* Anything marked hidden stays hidden, whatever else styles it. Without
+     this, a class that sets display — .row is a grid, .filters a flex box —
+     outranks the browser's own [hidden] rule, and the element shows anyway:
+     an empty "new version" button, a path field for a pet that needs none. */
+  [hidden] { display: none !important; }
+
   body {
     margin: 0;
     background: var(--bg);
