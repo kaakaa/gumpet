@@ -14,6 +14,7 @@ import (
 	"github.com/hajimehoshi/ebiten/v2"
 
 	"github.com/kaakaa/gumpet/internal/config"
+	"github.com/kaakaa/gumpet/internal/feed"
 	"github.com/kaakaa/gumpet/internal/history"
 	"github.com/kaakaa/gumpet/internal/message"
 	"github.com/kaakaa/gumpet/internal/pet"
@@ -103,10 +104,12 @@ func run() error {
 	store := settings.New(cfg, *configPath)
 	hist := history.New(cfg.History)
 	remarks := history.NewRemarks(cfg.History)
+	feedReports := feed.NewReports()
 	inbox := make(chan message.Message, inboxSize)
 	monitors := pet.Monitors()
 	srv := server.New(store, hist, monitors, inbox, log)
 	srv.SetRemarks(remarks)
+	srv.SetFeedReports(feedReports)
 	// Restarting ends the context, which ends both the game loop and the
 	// server the same way Ctrl-C does; main starts gumpet again afterwards.
 	restart := func() {
@@ -148,15 +151,16 @@ func run() error {
 
 	applyWindowSettings(cfg)
 	game := pet.New(pet.Options{
-		Store:   store,
-		Pack:    pack,
-		Inbox:   inbox,
-		History: hist,
-		Remarks: remarks,
-		Quit:    ctx.Done(),
-		Restart: restart,
-		Log:     log,
-		Version: version,
+		Store:       store,
+		Pack:        pack,
+		Inbox:       inbox,
+		History:     hist,
+		Remarks:     remarks,
+		FeedReports: feedReports,
+		Quit:        ctx.Done(),
+		Restart:     restart,
+		Log:         log,
+		Version:     version,
 	})
 
 	// Ebitengine has to own the main goroutine, and returns once the window is

@@ -309,6 +309,8 @@ func Openable(url string) bool {
 // memory rather than over a socket.
 type Fetcher struct {
 	Client *http.Client
+	// Reports, if set, is told the outcome of every read. See [Report].
+	Reports *Reports
 }
 
 // NewFetcher returns a Fetcher with sensible bounds.
@@ -320,8 +322,16 @@ func NewFetcher() *Fetcher {
 // making a request at all, so a config file cannot turn this into a way of
 // reading local files.
 func (f *Fetcher) Fetch(ctx context.Context, url string) ([]Item, error) {
+	items, _, _, err := f.fetch(ctx, url)
+	return items, err
+}
+
+// fetch is [Fetcher.Fetch], also returning what the server said and sent, for
+// the report. The body is returned even when it would not parse: that is the
+// case where someone most wants to see it.
+func (f *Fetcher) fetch(ctx context.Context, url string) (items []Item, status string, body []byte, err error) {
 	if !Openable(url) {
-		return nil, fmt.Errorf("feed URL must be http or https: %q", url)
+		return nil, "", nil, fmt.Errorf("feed URL must be http or https: %q", url)
 	}
 
 	ctx, cancel := context.WithTimeout(ctx, Timeout)
@@ -329,7 +339,7 @@ func (f *Fetcher) Fetch(ctx context.Context, url string) ([]Item, error) {
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		return nil, err
+		return nil, "", nil, err
 	}
 	req.Header.Set("User-Agent", "gumpet")
 	req.Header.Set("Accept", "application/rss+xml, application/atom+xml, application/xml, text/xml")
@@ -340,18 +350,19 @@ func (f *Fetcher) Fetch(ctx context.Context, url string) ([]Item, error) {
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, "", nil, err
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("fetch %s: %s", url, resp.Status)
-	}
-	body, err := io.ReadAll(io.LimitReader(resp.Body, MaxBody))
+	body, err = io.ReadAll(io.LimitReader(resp.Body, MaxBody))
 	if err != nil {
-		return nil, err
+		return nil, resp.Status, nil, err
 	}
-	return Parse(body)
+	if resp.StatusCode != http.StatusOK {
+		return nil, resp.Status, body, fmt.Errorf("fetch %s: %s", url, resp.Status)
+	}
+	items, err = Parse(body)
+	return items, resp.Status, body, err
 }
 
 // Source is a feed to read, together with the name headlines from it are
@@ -383,13 +394,21 @@ type Group struct {
 func (f *Fetcher) FetchAll(ctx context.Context, sources []Source, maxAge time.Duration, log *slog.Logger) []Group {
 	out := make([]Group, 0, len(sources))
 	for _, src := range sources {
-		items, err := f.Fetch(ctx, src.URL)
+		items, status, body, err := f.fetch(ctx, src.URL)
+		recent := Recent(items, maxAge, time.Now())
+
+		rep := Report{Name: src.Name, URL: src.URL, FetchedAt: time.Now(),
+			Status: status, Found: len(items), Recent: len(recent), body: body}
+		if err != nil {
+			rep.Error = err.Error()
+		}
+		f.Reports.put(rep)
+
 		if err != nil {
 			log.Error("could not read a feed, skipping it this time",
 				"feed", src.URL, "name", src.Name, "error", err)
 			continue
 		}
-		recent := Recent(items, maxAge, time.Now())
 		if len(recent) == 0 {
 			log.Info("a feed had nothing recent enough to say",
 				"headlines", len(items), "name", src.Name, "feed", src.URL)
