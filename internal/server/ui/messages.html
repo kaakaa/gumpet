@@ -243,6 +243,10 @@
   /* Held during quiet hours: received and kept, and deliberately not said.
      Grey, because nothing is wrong and nothing is pending. */
   .badge.held { background: var(--line); color: var(--muted); }
+  /* A headline the pet had said already: faint, like the balloon draws it,
+     so the new ones are what the eye lands on. */
+  .badge.again { background: var(--line); color: var(--muted); }
+  li.seen .text { color: var(--muted); }
 
   /* A message's level is shown as a stripe down its left edge rather than
      another badge: the badges already say whether the pet has said it, and two
@@ -566,6 +570,13 @@
       li.appendChild(text);
 
       if (remarks) {
+        if (msg.seen) {
+          li.classList.add("seen");
+          var again = document.createElement("span");
+          again.className = "badge again";
+          again.textContent = "seen before";
+          li.appendChild(again);
+        }
         // The article is what a headline was for, and the balloon it came in
         // was gone in seconds.
         var link = linkTo(msg.link);
