@@ -51,6 +51,9 @@ type Options struct {
 	// Remarks records what the pet says of its own accord, apart from
 	// History. It may be nil, in which case nothing is recorded.
 	Remarks *history.Store
+	// FeedReports is told how every read of a feed went, for the messages
+	// page. It may be nil.
+	FeedReports *feed.Reports
 	// Quit ends the game loop when it is closed.
 	Quit <-chan struct{}
 	// Restart stops gumpet and starts it again, the way an update does. The
@@ -88,11 +91,13 @@ type Game struct {
 	inbox   <-chan message.Message
 	history *history.Store
 	remarks *history.Store
-	quit    <-chan struct{}
-	restart func()
-	log     *slog.Logger
-	version string
-	debug   bool
+	// feedReports: see Options.FeedReports.
+	feedReports *feed.Reports
+	quit        <-chan struct{}
+	restart     func()
+	log         *slog.Logger
+	version     string
+	debug       bool
 
 	// deviceScale converts the logical coordinates everything below is written
 	// in into the physical pixels Draw is handed.
@@ -187,18 +192,19 @@ type Game struct {
 func New(o Options) *Game {
 	cfg := o.Store.Get()
 	g := &Game{
-		store:   o.Store,
-		cfg:     cfg,
-		updates: o.Store.Subscribe(8),
-		pack:    o.Pack,
-		inbox:   o.Inbox,
-		history: o.History,
-		remarks: o.Remarks,
-		quit:    o.Quit,
-		restart: o.Restart,
-		log:     o.Log,
-		version: o.Version,
-		debug:   os.Getenv("GUMPET_DEBUG") != "",
+		store:       o.Store,
+		cfg:         cfg,
+		updates:     o.Store.Subscribe(8),
+		pack:        o.Pack,
+		inbox:       o.Inbox,
+		history:     o.History,
+		remarks:     o.Remarks,
+		feedReports: o.FeedReports,
+		quit:        o.Quit,
+		restart:     o.Restart,
+		log:         o.Log,
+		version:     o.Version,
+		debug:       os.Getenv("GUMPET_DEBUG") != "",
 		// Buffered, so a fetch that lands while the loop is elsewhere does not
 		// leave its goroutine parked on the send.
 		headlines:   make(chan [][]chatter.Remark, 1),
@@ -697,21 +703,24 @@ func (g *Game) advanceFeed(dt time.Duration) {
 	maxAge := time.Duration(cfg.MaxAgeDays * float64(24*time.Hour))
 	log := g.log
 	out := g.headlines
+	reports := g.feedReports
 	go func() {
-		out <- fetchAll(feeds, maxAge, log)
+		out <- fetchAll(feeds, maxAge, reports, log)
 	}()
 }
 
 // fetchAll reads the configured feeds and turns each one's headlines into a
 // group of remarks labelled with that feed's name.
-func fetchAll(feeds []config.Feed, maxAge time.Duration, log *slog.Logger) [][]chatter.Remark {
+func fetchAll(feeds []config.Feed, maxAge time.Duration, reports *feed.Reports, log *slog.Logger) [][]chatter.Remark {
 	sources := make([]feed.Source, len(feeds))
 	for i, f := range feeds {
 		sources[i] = feed.Source{Name: f.Name, URL: f.URL}
 	}
 
 	var groups [][]chatter.Remark
-	for _, g := range feed.NewFetcher().FetchAll(context.Background(), sources, maxAge, log) {
+	fetcher := feed.NewFetcher()
+	fetcher.Reports = reports
+	for _, g := range fetcher.FetchAll(context.Background(), sources, maxAge, log) {
 		remarks := make([]chatter.Remark, 0, len(g.Items))
 		for _, it := range g.Items {
 			// Published is carried rather than written into the text: the
