@@ -46,6 +46,9 @@ var (
 	panelFill   = color.NRGBA{R: 0xff, G: 0xff, B: 0xff, A: 0xf7}
 	panelBorder = color.NRGBA{R: 0x33, G: 0x33, B: 0x33, A: 0xff}
 	textColor   = color.NRGBA{R: 0x1a, G: 0x1a, B: 0x1a, A: 0xff}
+	// seenColor is the text of a headline the pet has said before: still
+	// readable, but plainly not the news the dark text is.
+	seenColor   = color.NRGBA{R: 0x80, G: 0x80, B: 0x80, A: 0xff}
 	mutedColor  = color.NRGBA{R: 0x70, G: 0x70, B: 0x70, A: 0xff}
 	hoverColor  = color.NRGBA{R: 0x00, G: 0xad, B: 0xd8, A: 0x33}
 	ruleColor   = color.NRGBA{R: 0x00, G: 0x00, B: 0x00, A: 0x22}
@@ -78,6 +81,8 @@ func colorsFor(level message.Level) (border, accent color.NRGBA) {
 
 // balloon is a message wrapped and measured, ready to draw.
 type balloon struct {
+	// seen is a headline said before, drawn fainter. See [message.Message.Seen].
+	seen bool
 	// title is the heading above the text, empty for most messages.
 	title []richtext.Line
 	lines []richtext.Line
@@ -123,6 +128,16 @@ func (g *Game) layoutBalloon(msg message.Message) *balloon {
 	// The stamp is measured before the heading is wrapped, because it shares
 	// that line: what it takes is not available to wrap the heading into.
 	b.stamp = message.Stamp(msg.At, time.Now())
+	b.seen = msg.Seen
+	if msg.Seen {
+		// Said in the corner with the time, where it costs no room: a repeat
+		// is worth knowing about, not worth a line of its own.
+		if b.stamp == "" {
+			b.stamp = g.tr("seen")
+		} else {
+			b.stamp = g.tr("seen") + " · " + b.stamp
+		}
+	}
 	var stampW, headW, headLineH float64
 	if b.stamp != "" {
 		stampW = g.fonts.stamp.Advance(b.stamp)
@@ -295,8 +310,12 @@ func (g *Game) drawBalloons(screen *ebiten.Image) {
 		if typed := int(g.showing[i].typed); typed < b.runes {
 			lines = richtext.Reveal(lines, typed, g.fonts.message)
 		}
+		ink := textColor
+		if b.seen {
+			ink = seenColor
+		}
 		g.drawRichText(screen, lines, (x+balloonPadding)*ds, (y+balloonPadding+b.headH)*ds,
-			g.fonts.message, textColor)
+			g.fonts.message, ink)
 	}
 }
 

@@ -232,7 +232,7 @@ func TestAddRemarkKeepsTheLinkAndDate(t *testing.T) {
 	rec := s.AddRemark(chatter.Remark{
 		Text: "Go 2 is out", Title: "Go Blog",
 		Link: "https://go.dev/blog/go2", At: published,
-	})
+	}, true)
 
 	if rec.Text != "Go 2 is out" || rec.Title != "Go Blog" {
 		t.Errorf("recorded %q under %q, want the headline under the feed's name", rec.Text, rec.Title)
@@ -245,6 +245,9 @@ func TestAddRemarkKeepsTheLinkAndDate(t *testing.T) {
 	}
 	if !rec.Shown() || !rec.ShownAt.Equal(c.t) {
 		t.Errorf("shown at %v, want %v: a remark is on screen as soon as it is said", rec.ShownAt, c.t)
+	}
+	if !rec.Seen {
+		t.Error("a repeat was recorded as new")
 	}
 	if rec.ID != "r1" {
 		t.Errorf("id = %q, want r1: remark IDs must not collide with message IDs", rec.ID)
@@ -263,7 +266,7 @@ func TestRemarksNeverPushMessagesOut(t *testing.T) {
 		messages.Add(message.Message{Text: fmt.Sprintf("sent %d", i)})
 	}
 	for i := range 100 {
-		remarks.AddRemark(chatter.Remark{Text: fmt.Sprintf("headline %d", i)})
+		remarks.AddRemark(chatter.Remark{Text: fmt.Sprintf("headline %d", i)}, false)
 	}
 
 	if got := messages.Len(); got != 3 {

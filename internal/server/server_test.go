@@ -553,7 +553,7 @@ func TestRemarksAreListedApartFromMessages(t *testing.T) {
 	s.SetRemarks(remarks)
 
 	post(t, s, "text/plain", "sent by someone", nil)
-	remarks.AddRemark(chatter.Remark{Text: "Go 2 is out", Title: "Go Blog", Link: "https://go.dev/blog/go2"})
+	remarks.AddRemark(chatter.Remark{Text: "Go 2 is out", Title: "Go Blog", Link: "https://go.dev/blog/go2"}, false)
 
 	rec := do(t, s, http.MethodGet, "/api/v1/messages", "", "", nil)
 	var body struct {
@@ -596,7 +596,7 @@ func TestSavingHistoryLimitsPrunesRemarksToo(t *testing.T) {
 	s.SetRemarks(remarks)
 
 	for range 5 {
-		remarks.AddRemark(chatter.Remark{Text: "headline"})
+		remarks.AddRemark(chatter.Remark{Text: "headline"}, false)
 	}
 	rec := do(t, s, http.MethodPut, "/api/v1/config", "application/json", `{"history":{"max":2}}`, nil)
 	if rec.Code != http.StatusOK {

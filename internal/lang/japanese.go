@@ -21,6 +21,9 @@ var japanese = map[string]string{
 	"perimeter":  "縁を回る",
 	"wander":     "歩き回る",
 
+	// What the balloons say about themselves.
+	"seen": "既読",
+
 	// What the pet says itself.
 	"While it was quiet":                       "静かにしている間",
 	"{0} messages arrived while it was quiet.": "静かにしている間に {0} 件のメッセージが届きました。",

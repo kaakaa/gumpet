@@ -35,6 +35,8 @@ type Record struct {
 	// received and kept, and was never going to be said; without this it
 	// would sit on the page as "waiting" for good.
 	Held bool `json:"held,omitempty"`
+	// Seen marks a headline the pet had already said. Only remarks have one.
+	Seen bool `json:"seen,omitempty"`
 	// Link is the article a headline points at. Only remarks have one.
 	Link string `json:"link,omitempty"`
 	// Published is when the feed says the article appeared, or the zero time
@@ -107,8 +109,9 @@ func (s *Store) Add(msg message.Message) Record {
 }
 
 // AddRemark records something the pet has just said of its own accord. A
-// remark goes straight on screen, so it is recorded as already shown.
-func (s *Store) AddRemark(r chatter.Remark) Record {
+// remark goes straight on screen, so it is recorded as already shown. seen
+// says the pet had said it before; see [chatter.Seen].
+func (s *Store) AddRemark(r chatter.Remark, seen bool) Record {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -123,6 +126,7 @@ func (s *Store) AddRemark(r chatter.Remark) Record {
 		ShownAt:   now,
 		Link:      r.Link,
 		Published: r.At,
+		Seen:      seen,
 	}
 	s.records = append(s.records, rec)
 	s.prune()
