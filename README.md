@@ -239,6 +239,8 @@ Clicking the pet opens a short menu with:
 - **Settings…** — opens the settings page
 - **Pet** — cycles through the bundled pets
 - **Walk** — cycles through the four roaming styles
+- **Restart** — quits and starts again, for when something on screen has gone
+  wrong and a fresh start is quicker than working out what
 - **Quit**
 
 It holds only what is worth switching while looking at the pet. Everything
