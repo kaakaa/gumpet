@@ -11,6 +11,7 @@ var japanese = map[string]string{
 	"Messages…": "メッセージ…",
 	"Pet":       "ペット",
 	"Walk":      "歩き方",
+	"Restart":   "再起動",
 	"Quit":      "終了",
 
 	// What the rows show on the right.

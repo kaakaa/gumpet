@@ -52,7 +52,11 @@ type Options struct {
 	// History. It may be nil, in which case nothing is recorded.
 	Remarks *history.Store
 	// Quit ends the game loop when it is closed.
-	Quit    <-chan struct{}
+	Quit <-chan struct{}
+	// Restart stops gumpet and starts it again, the way an update does. The
+	// menu offers it for when something on screen has gone wrong and a fresh
+	// start is quicker than working out what. Nil hides the row.
+	Restart func()
 	Log     *slog.Logger
 	Version string
 }
@@ -85,6 +89,7 @@ type Game struct {
 	history *history.Store
 	remarks *history.Store
 	quit    <-chan struct{}
+	restart func()
 	log     *slog.Logger
 	version string
 	debug   bool
@@ -190,6 +195,7 @@ func New(o Options) *Game {
 		history: o.History,
 		remarks: o.Remarks,
 		quit:    o.Quit,
+		restart: o.Restart,
 		log:     o.Log,
 		version: o.Version,
 		debug:   os.Getenv("GUMPET_DEBUG") != "",
