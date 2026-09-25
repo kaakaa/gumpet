@@ -86,6 +86,41 @@
   }
   .tabs button[aria-selected=true] { color: var(--ink); border-bottom-color: var(--accent); }
 
+  /* How each feed was last read, above what the pet said from them. */
+  .feeds { margin: 0 0 18px; }
+  .feeds h2 { font-size: 13px; color: var(--muted); margin: 0 0 8px; font-weight: 600; }
+  .feed-url {
+    grid-column: 1;
+    font: 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    color: var(--muted);
+    overflow-wrap: anywhere;
+  }
+  .feeds .failed { color: var(--err-ink); }
+  .feeds button {
+    grid-row: 1 / 3;
+    grid-column: 2;
+    align-self: start;
+    background: none;
+    color: var(--accent);
+    border: 1px solid var(--line);
+    padding: 3px 10px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .source {
+    grid-column: 1 / -1;
+    max-height: 360px;
+    overflow: auto;
+    margin: 6px 0 0;
+    padding: 8px 10px;
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
   .link {
     grid-column: 1;
     font-size: 13px;
@@ -249,6 +284,10 @@
     <button type="button" role="tab" id="tab-messages" aria-selected="true">Received</button>
     <button type="button" role="tab" id="tab-remarks" aria-selected="false">Said by the pet</button>
   </div>
+  <section class="feeds" id="feeds" hidden>
+    <h2>Feeds</h2>
+    <ul id="feed-list"></ul>
+  </section>
   <p class="summary" id="summary">Loading&hellip;</p>
 
   <div class="filters" id="filters" hidden>
@@ -364,6 +403,115 @@
     el.appendChild(document.createTextNode(text.slice(from)));
   }
 
+  // The feeds block: how each configured feed was last read, and what it
+  // served. It is rebuilt only when a report changes — the page refreshes
+  // every few seconds, and rebuilding would close a source someone is in the
+  // middle of reading — and in between only the times are brought up to date.
+  var feedsData = null;
+  var feedsBuiltFrom = "";
+  var feedRows = [];
+  // Sources opened, by URL, so that a rebuild opens them again.
+  var openSources = {};
+
+  function size(n) {
+    if (n < 1024) { return n + " B"; }
+    if (n < 1024 * 1024) { return Math.round(n / 1024) + " KB"; }
+    return (n / 1024 / 1024).toFixed(1) + " MB";
+  }
+
+  function describe(f) {
+    if (!f.fetched_at) {
+      return feedsData.reading
+        ? "Not read yet."
+        : "Not read: talking to itself is off in the settings, and feeds are only read while it is on.";
+    }
+    if (f.error) { return "Failed " + ago(f.fetched_at) + ": " + f.error; }
+    return "Read " + ago(f.fetched_at) + " · " + f.found + (f.found === 1 ? " headline, " : " headlines, ") +
+      f.recent + " recent enough to say · " + size(f.size);
+  }
+
+  function showSource(row, text) {
+    var pre = row.li.querySelector(".source");
+    if (!pre) {
+      pre = document.createElement("pre");
+      pre.className = "source";
+      row.li.appendChild(pre);
+    }
+    // textContent, always: this is somebody else's document.
+    pre.textContent = text;
+    row.button.textContent = "Hide source";
+  }
+
+  function loadSource(row) {
+    row.button.disabled = true;
+    request("api/v1/feeds/source?url=" + encodeURIComponent(row.feed.url)).then(function (d) {
+      openSources[row.feed.url] = true;
+      showSource(row, d.text);
+    }).catch(function (err) {
+      showSource(row, "Could not load the source: " + err.message);
+    }).then(function () {
+      row.button.disabled = false;
+    });
+  }
+
+  function renderFeeds() {
+    var block = $("feeds");
+    var feeds = (feedsData && feedsData.feeds) || [];
+    block.hidden = view !== "remarks" || feeds.length === 0;
+    if (block.hidden) { return; }
+
+    var key = JSON.stringify(feedsData);
+    if (key === feedsBuiltFrom) {
+      feedRows.forEach(function (row) { row.when.textContent = describe(row.feed); });
+      return;
+    }
+    feedsBuiltFrom = key;
+
+    var list = $("feed-list");
+    list.textContent = "";
+    feedRows = feeds.map(function (f) {
+      var li = document.createElement("li");
+      var title = document.createElement("p");
+      title.className = "title";
+      title.textContent = f.name || "(no name)";
+      li.appendChild(title);
+
+      var url = document.createElement("span");
+      url.className = "feed-url";
+      url.textContent = f.url;
+      li.appendChild(url);
+
+      var when = document.createElement("span");
+      when.className = "when" + (f.error ? " failed" : "");
+      li.appendChild(when);
+
+      var row = { feed: f, li: li, when: when, button: null };
+      if (f.has_source) {
+        var button = document.createElement("button");
+        button.type = "button";
+        button.textContent = "Source";
+        button.addEventListener("click", function () {
+          if (openSources[f.url]) {
+            delete openSources[f.url];
+            var pre = li.querySelector(".source");
+            if (pre) { pre.remove(); }
+            button.textContent = "Source";
+            return;
+          }
+          loadSource(row);
+        });
+        li.appendChild(button);
+        row.button = button;
+      }
+      when.textContent = describe(f);
+      list.appendChild(li);
+      // A source that was open is fetched again: the feed has been read
+      // since, and the old text would not be what it serves now.
+      if (openSources[f.url] && row.button) { loadSource(row); }
+      return row;
+    });
+  }
+
   // linkTo is a feed's link, if it is one this page is prepared to offer. A
   // feed is somebody else's XML: a javascript: URL in one must not become
   // something to click.
@@ -385,6 +533,7 @@
 
   function render() {
     showTabs();
+    renderFeeds();
     if (latest === null) { return; }
     var remarks = view === "remarks";
     var all = latest[view] || [];
@@ -475,7 +624,11 @@
   }
 
   function load() {
-    return request("api/v1/messages").then(function (data) {
+    // The feeds' reports are extra: a failure there must not stop the list.
+    var feeds = request("api/v1/feeds").catch(function () { return null; });
+    return Promise.all([request("api/v1/messages"), feeds]).then(function (res) {
+      var data = res[0];
+      feedsData = res[1];
       $("auth").hidden = true;
       $("error").hidden = true;
       latest = data;

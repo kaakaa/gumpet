@@ -19,6 +19,7 @@ import (
 
 	"github.com/kaakaa/gumpet/internal/config"
 	"github.com/kaakaa/gumpet/internal/display"
+	"github.com/kaakaa/gumpet/internal/feed"
 	"github.com/kaakaa/gumpet/internal/fontfile"
 	"github.com/kaakaa/gumpet/internal/history"
 	"github.com/kaakaa/gumpet/internal/message"
@@ -43,6 +44,8 @@ type Server struct {
 	history *history.Store
 	// remarks records what the pet said of its own accord. It may be nil.
 	remarks *history.Store
+	// feedReports says how the last read of each feed went. It may be nil.
+	feedReports *feed.Reports
 	// monitors is what the machine reported at startup, so the settings page
 	// can name the displays rather than asking for a number on faith.
 	monitors []display.Monitor
@@ -99,6 +102,8 @@ func New(store *settings.Store, hist *history.Store, monitors []display.Monitor,
 	mux.HandleFunc("GET /api/v1/config", s.authed(s.handleGetConfig))
 	mux.HandleFunc("PUT /api/v1/config", s.authed(s.handlePutConfig))
 	mux.HandleFunc("GET /api/v1/healthz", s.handleHealth)
+	mux.HandleFunc("GET /api/v1/feeds", s.authed(s.handleFeeds))
+	mux.HandleFunc("GET /api/v1/feeds/source", s.authed(s.handleFeedSource))
 	mux.HandleFunc("GET /api/v1/update", s.authed(s.handleCheckUpdate))
 	mux.HandleFunc("POST /api/v1/update", s.authed(s.handleApplyUpdate))
 
@@ -125,6 +130,10 @@ type Updater interface {
 func (s *Server) SetUpdater(u Updater, restart func()) {
 	s.updater, s.restart = u, restart
 }
+
+// SetFeedReports lets the messages page show how each feed was last read, and
+// what it served.
+func (s *Server) SetFeedReports(r *feed.Reports) { s.feedReports = r }
 
 // SetRemarks gives the messages page the record of what the pet has said of
 // its own accord. Without it the page shows that list as empty.
@@ -255,6 +264,53 @@ func (s *Server) handleApplyUpdate(w http.ResponseWriter, r *http.Request) {
 			s.restart()
 		}()
 	}
+}
+
+// feedSources are the feeds the settings name right now.
+func (s *Server) feedSources() []feed.Source {
+	var out []feed.Source
+	for _, f := range s.config().Behavior.Chatter.Feeds {
+		out = append(out, feed.Source{Name: f.Name, URL: f.URL})
+	}
+	return out
+}
+
+// handleFeeds reports how each configured feed was last read. Whether the pet
+// is talking to itself at all is included, because with it off the feeds are
+// never read, and "not read yet" would otherwise look like a fault.
+func (s *Server) handleFeeds(w http.ResponseWriter, r *http.Request) {
+	reports := []feed.Report{}
+	if s.feedReports != nil {
+		reports = s.feedReports.For(s.feedSources())
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"reading": s.config().Behavior.Chatter.Enabled,
+		"feeds":   reports,
+	})
+}
+
+// handleFeedSource answers with what one feed last served, as text. Only a
+// configured feed is answered for: this serves somebody else's content back
+// out, and should not be a way to ask for anything else.
+func (s *Server) handleFeedSource(w http.ResponseWriter, r *http.Request) {
+	url := r.URL.Query().Get("url")
+	configured := false
+	for _, f := range s.feedSources() {
+		configured = configured || f.URL == url
+	}
+	if !configured || s.feedReports == nil {
+		writeError(w, http.StatusNotFound, "no such feed")
+		return
+	}
+	text, ok := s.feedReports.Source(url)
+	if !ok {
+		writeError(w, http.StatusNotFound, "that feed has served nothing yet")
+		return
+	}
+	// JSON, not the feed's own bytes: the page shows it as text, and a feed's
+	// content served back under this origin as anything the browser might
+	// render would be somebody else's HTML on gumpet's page.
+	writeJSON(w, http.StatusOK, map[string]string{"url": url, "text": text})
 }
 
 // handleListMessages is what the messages page reads: everything gumpet has
