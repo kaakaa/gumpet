@@ -132,6 +132,9 @@ type Game struct {
 	// chatter is the pet talking to itself between messages, or nil when the
 	// setting is off.
 	chatter *chatter.Sayer
+	// seen is which headlines have been said already, so a repeat can be
+	// told from a new one.
+	seen chatter.Seen
 	// hush follows the quiet window. wasQuiet is what it said last frame, so
 	// the moment quiet begins can be told from every frame after it.
 	hush     quiet.Hush
@@ -604,6 +607,7 @@ func (g *Game) advanceChatter(dt time.Duration) {
 	if !ok {
 		return
 	}
+	seen := g.seen.Mark(remark)
 
 	g.showing = append(g.showing, shown{
 		// The title names the feed a headline came from, so that two feeds
@@ -614,6 +618,7 @@ func (g *Game) advanceChatter(dt time.Duration) {
 			Title: remark.Title,
 			Level: message.LevelInfo,
 			At:    remark.At,
+			Seen:  seen,
 		},
 		remaining: time.Duration(g.cfg.Message.DurationSec * float64(time.Second)),
 		idle:      true,
@@ -624,7 +629,7 @@ func (g *Game) advanceChatter(dt time.Duration) {
 	// A balloon goes by in seconds, and a headline is often the one thing on
 	// screen worth following up — usually noticed just as it goes.
 	if g.remarks != nil {
-		g.remarks.AddRemark(remark)
+		g.remarks.AddRemark(remark, seen)
 	}
 }
 

@@ -63,6 +63,9 @@ type Message struct {
 	// Zero means there is no such moment — a saying out of a file came from
 	// nowhere in particular — and nothing is drawn.
 	At time.Time
+	// Seen marks a headline the pet has already said while running, so the
+	// balloon can say it is a repeat. See [chatter.Seen].
+	Seen bool
 }
 
 // Copied is what the balloon puts on the clipboard: the heading, if there is
