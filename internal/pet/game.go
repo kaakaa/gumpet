@@ -211,6 +211,9 @@ func New(o Options) *Game {
 	g.walker.SetJumping(cfg.Behavior.Jump)
 	g.winW, g.winH = int(math.Ceil(g.petWidth())), int(math.Ceil(g.petHeight()))
 	g.setQuietWindow(cfg.Behavior.Quiet)
+	// The taskbar button shows whatever pet is on screen, and follows it when
+	// it changes. See applyConfig.
+	ebiten.SetWindowIcon(o.Pack.Icon)
 	g.locale = lang.Detect()
 	g.setLanguage(cfg.Language)
 	return g
@@ -402,6 +405,7 @@ func (g *Game) applyConfig(cfg config.Config) {
 		} else {
 			g.log.Info("loaded pet", "pack", pack.Name, "frames", len(pack.Walk), "size", pack.Size)
 			g.pack = pack
+			ebiten.SetWindowIcon(pack.Icon)
 			g.resetAnimation()
 		}
 	}

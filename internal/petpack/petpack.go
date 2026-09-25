@@ -10,6 +10,7 @@ import (
 
 	"github.com/hajimehoshi/ebiten/v2"
 
+	"github.com/kaakaa/gumpet/internal/icon"
 	"github.com/kaakaa/gumpet/internal/petsrc"
 )
 
@@ -36,6 +37,9 @@ type Pack struct {
 	// it should be smoothed. See [petsrc.Source].
 	Scale  float64
 	Smooth bool
+	// Icon is the window's icon, made from the first frame at the sizes a
+	// window system asks for. See [icon.From].
+	Icon []image.Image
 }
 
 // TalkFrames returns the animation to play while a message is up.
@@ -59,6 +63,7 @@ func Load(source string) (*Pack, error) {
 		Size:   src.Size,
 		Scale:  src.Scale,
 		Smooth: src.Smooth,
+		Icon:   icon.From(src.Walk[0].Image, src.Smooth),
 	}, nil
 }
 
