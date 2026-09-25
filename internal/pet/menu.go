@@ -59,7 +59,8 @@ func (g *Game) buildMenu() *menu {
 	m := &menu{hover: -1}
 
 	// The menu holds what is worth reaching for while looking at the pet: the
-	// two pages, and the two things people switch on the spot. Everything set
+	// two pages, the two things people switch on the spot, and a way out — or
+	// back in, when the screen has got into a state. Everything set
 	// once and left alone lives on the settings page, where there is room to
 	// explain it. A longer menu here was a list nobody read to the end of.
 	m.items = append(m.items,
@@ -96,13 +97,24 @@ func (g *Game) buildMenu() *menu {
 				})
 			},
 		},
-		menuItem{
-			label:  tr("Quit"),
+	)
+	if g.restart != nil {
+		m.items = append(m.items, menuItem{
+			label:  tr("Restart"),
 			rule:   true,
 			closes: true,
-			action: func() error { return ebiten.Termination },
-		},
-	)
+			action: func() error {
+				g.restart()
+				return nil
+			},
+		})
+	}
+	m.items = append(m.items, menuItem{
+		label:  tr("Quit"),
+		rule:   g.restart == nil,
+		closes: true,
+		action: func() error { return ebiten.Termination },
+	})
 
 	m.measure(g)
 	return m

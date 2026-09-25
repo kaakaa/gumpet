@@ -34,9 +34,11 @@ const ticksPerSecond = 30
 // loop, which drains the channel every tick.
 const inboxSize = 64
 
-// restartRequested is set once an update has been installed. The restart
-// itself waits until run has returned: the pet's window closed and, above all,
-// the server let go of its address, which the new process has to take.
+// restartRequested is set when gumpet should start again once it has stopped:
+// after an update is installed, or when the menu's Restart is picked. The
+// restart itself waits until run has returned — the pet's window closed and,
+// above all, the server let go of its address, which the new process has to
+// take.
 var restartRequested atomic.Bool
 
 func main() {
@@ -50,7 +52,7 @@ func main() {
 			err = update.Restart(exe)
 		}
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "gumpet: installed an update but could not restart into it: %v\n", err)
+			fmt.Fprintf(os.Stderr, "gumpet: could not start again: %v\n", err)
 			os.Exit(1)
 		}
 	}
@@ -105,18 +107,19 @@ func run() error {
 	monitors := pet.Monitors()
 	srv := server.New(store, hist, monitors, inbox, log)
 	srv.SetRemarks(remarks)
+	// Restarting ends the context, which ends both the game loop and the
+	// server the same way Ctrl-C does; main starts gumpet again afterwards.
+	restart := func() {
+		restartRequested.Store(true)
+		stop()
+	}
 	if exe, err := os.Executable(); err != nil {
 		log.Warn("updates are off: cannot tell where this gumpet is", "error", err)
 	} else {
 		// What an update on Windows had to leave behind: the old executable,
 		// which could not be deleted while it was running.
 		update.Cleanup(exe)
-		srv.SetUpdater(update.New(version, exe), func() {
-			restartRequested.Store(true)
-			// Ending the context ends both the game loop and the server,
-			// the same way Ctrl-C does.
-			stop()
-		})
+		srv.SetUpdater(update.New(version, exe), restart)
 	}
 
 	// Claim the port before opening a window. gumpet exists to be sent
@@ -151,6 +154,7 @@ func run() error {
 		History: hist,
 		Remarks: remarks,
 		Quit:    ctx.Done(),
+		Restart: restart,
 		Log:     log,
 		Version: version,
 	})
