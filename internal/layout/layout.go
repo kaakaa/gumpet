@@ -62,6 +62,10 @@ type Window struct {
 	PanelX, PanelY float64
 	// TailX is where a balloon's tail should point, within the window.
 	TailX float64
+	// Below says the panel is under the pet rather than over it, because
+	// there was no room above. Balloons stack downwards then, and the tail
+	// points up. See [Orient].
+	Below bool
 }
 
 // PlaceWindow sizes gumpet's window around the pet and whatever it is saying,
@@ -77,23 +81,40 @@ func PlaceWindow(petX, petY, petW, petH float64, panel Panel, gap float64, monit
 		h += panel.H + gap
 	}
 
+	// The panel goes above the pet unless it would not fit there — a pet near
+	// the top of the screen — and it would fit better below. Pushed back onto
+	// the screen instead, it used to come to rest on top of the pet, covering
+	// the very thing that was talking. Where neither side has room, the roomier
+	// one covers less.
+	need := panel.H + gap
+	roomAbove := petY - monitor.Y
+	roomBelow := monitor.Y + monitor.H - (petY + petH)
+	below := panel.H > 0 && roomAbove < need && roomBelow > roomAbove
+
 	// Where the window would go if nothing were in its way.
 	x := petX - (w-petW)/2
 	y := petY - (h - petH)
+	if below {
+		y = petY
+	}
 
 	// Sliding the window back on screen would drag the pet with it, so the pet's
 	// offset inside the window is recomputed from wherever the window ends up.
 	x = Clamp(x, monitor.X, monitor.X+monitor.W-w)
 	y = Clamp(y, monitor.Y, monitor.Y+monitor.H-h)
 
-	win := Window{X: x, Y: y, W: w, H: h}
+	win := Window{X: x, Y: y, W: w, H: h, Below: below}
 	win.PetX = petX - x
 	win.PetY = petY - y
 
 	if panel.H > 0 {
 		center := win.PetX + petW/2
 		win.PanelX = Clamp(center-panel.W/2, 0, w-panel.W)
-		win.PanelY = Clamp(win.PetY-gap-panel.H, 0, math.Max(h-panel.H, 0))
+		if below {
+			win.PanelY = Clamp(win.PetY+petH+gap, 0, math.Max(h-panel.H, 0))
+		} else {
+			win.PanelY = Clamp(win.PetY-gap-panel.H, 0, math.Max(h-panel.H, 0))
+		}
 		win.TailX = Clamp(center, win.PanelX, win.PanelX+panel.W)
 	}
 	return win
@@ -116,6 +137,22 @@ type Size struct {
 // Point is a position in pixels.
 type Point struct {
 	X, Y float64
+}
+
+// Orient turns a stack laid out by [StackBalloons] the right way up for where
+// the panel ended up. Above the pet it is used as it is. Below the pet it is
+// mirrored top to bottom, so the first balloon — the one with the tail — is
+// still the one nearest the pet, and the rest pile away from it.
+func Orient(points []Point, sizes []Size, panelH float64, below bool) []Point {
+	out := make([]Point, len(points))
+	copy(out, points)
+	if !below {
+		return out
+	}
+	for i := range out {
+		out[i].Y = panelH - (points[i].Y + sizes[i].H)
+	}
+	return out
 }
 
 // StackBalloons piles balloons above the pet: the first at the bottom, where

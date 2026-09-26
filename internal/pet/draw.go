@@ -265,11 +265,11 @@ func (g *Game) drawBalloons(screen *ebiten.Image) {
 	// Newest on top of older ones, so the most recent is never buried.
 	for i := len(g.showing) - 1; i >= 0; i-- {
 		b := g.showing[i].balloon
-		if b == nil || i >= len(g.placed) {
+		if b == nil || i >= len(g.at) {
 			continue
 		}
-		x := g.win.PanelX + g.placed[i].X
-		y := g.win.PanelY + g.placed[i].Y
+		x := g.win.PanelX + g.at[i].X
+		y := g.win.PanelY + g.at[i].Y
 
 		var path *vector.Path
 		if i == 0 {
@@ -280,6 +280,7 @@ func (g *Game) drawBalloons(screen *ebiten.Image) {
 				float32(x*ds), float32(y*ds), float32(b.width*ds), float32(b.height*ds),
 				float32(balloonRadius*ds), float32(tailX*ds),
 				float32(tailWidth*ds), float32(tailHeight*ds),
+				g.win.Below,
 			)
 		} else {
 			path = roundedRectPath(
@@ -442,7 +443,10 @@ func roundedRectPath(x, y, w, h, radius float32) *vector.Path {
 
 // balloonPath traces a rounded rectangle with a tail hanging off the bottom
 // edge at tailX, as one closed outline so the fill and stroke stay seamless.
-func balloonPath(x, y, w, h, radius, tailX, tailW, tailH float32) *vector.Path {
+// balloonPath outlines a balloon with its tail on the bottom edge, pointing
+// down at a pet below it — or, with up, on the top edge, pointing up at a pet
+// above it.
+func balloonPath(x, y, w, h, radius, tailX, tailW, tailH float32, up bool) *vector.Path {
 	radius = clampRadius(radius, w, h)
 	// Keep the tail clear of the corners, and inside the balloon.
 	lo, hi := x+radius+tailW/2, x+w-radius-tailW/2
@@ -453,13 +457,20 @@ func balloonPath(x, y, w, h, radius, tailX, tailW, tailH float32) *vector.Path {
 
 	var p vector.Path
 	p.MoveTo(x+radius, y)
+	if up {
+		p.LineTo(tailX-tailW/2, y)
+		p.LineTo(tailX, y-tailH)
+		p.LineTo(tailX+tailW/2, y)
+	}
 	p.LineTo(x+w-radius, y)
 	p.ArcTo(x+w, y, x+w, y+radius, radius)
 	p.LineTo(x+w, y+h-radius)
 	p.ArcTo(x+w, y+h, x+w-radius, y+h, radius)
-	p.LineTo(tailX+tailW/2, y+h)
-	p.LineTo(tailX, y+h+tailH)
-	p.LineTo(tailX-tailW/2, y+h)
+	if !up {
+		p.LineTo(tailX+tailW/2, y+h)
+		p.LineTo(tailX, y+h+tailH)
+		p.LineTo(tailX-tailW/2, y+h)
+	}
 	p.LineTo(x+radius, y+h)
 	p.ArcTo(x, y+h, x, y+h-radius, radius)
 	p.LineTo(x, y+radius)

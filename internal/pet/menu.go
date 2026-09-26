@@ -419,11 +419,11 @@ func (g *Game) balloonAt(px, py float64) int {
 	}
 	for i := len(g.showing) - 1; i >= 0; i-- {
 		b := g.showing[i].balloon
-		if b == nil || i >= len(g.placed) {
+		if b == nil || i >= len(g.at) {
 			continue
 		}
-		x := g.win.PanelX + g.placed[i].X
-		y := g.win.PanelY + g.placed[i].Y
+		x := g.win.PanelX + g.at[i].X
+		y := g.win.PanelY + g.at[i].Y
 		if px >= x && px < x+b.width && py >= y && py < y+b.height {
 			return i
 		}
@@ -434,15 +434,15 @@ func (g *Game) balloonAt(px, py float64) int {
 // linkAt returns the URL under a point in balloon i, or "" if the point is not
 // on a link.
 func (g *Game) linkAt(i int, px, py float64) string {
-	if i < 0 || i >= len(g.showing) || i >= len(g.placed) {
+	if i < 0 || i >= len(g.showing) || i >= len(g.at) {
 		return ""
 	}
 	b := g.showing[i].balloon
 	if b == nil {
 		return ""
 	}
-	x := g.win.PanelX + g.placed[i].X
-	y := g.win.PanelY + g.placed[i].Y
+	x := g.win.PanelX + g.at[i].X
+	y := g.win.PanelY + g.at[i].Y
 
 	for _, l := range b.links() {
 		if px >= x+l.x && px < x+l.x+l.w && py >= y+l.y && py < y+l.y+l.h {
