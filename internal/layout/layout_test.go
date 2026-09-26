@@ -161,9 +161,17 @@ func TestWindowStaysOnTheMonitor(t *testing.T) {
 			if win.PanelY < 0 || win.PanelY+panel.H > win.H {
 				t.Errorf("panel spans %v..%v inside a window %v tall", win.PanelY, win.PanelY+panel.H, win.H)
 			}
+			// Above all, what the pet says must not cover the pet. At the top
+			// of the screen there is no room above it, and the panel used to
+			// be pushed down onto it.
+			if overlaps(win.PanelY, win.PanelY+panel.H, win.PetY, win.PetY+petH) {
+				t.Errorf("panel spans y %v..%v over the pet at %v..%v", win.PanelY, win.PanelY+panel.H, win.PetY, win.PetY+petH)
+			}
 		})
 	}
 }
+
+func overlaps(a0, a1, b0, b1 float64) bool { return a0 < b1 && b0 < a1 }
 
 func TestTailStaysWithinThePanel(t *testing.T) {
 	// A narrow panel beside a pet at the edge is where the tail would otherwise
@@ -278,5 +286,96 @@ func TestStackBalloonsPanelContainsEveryBalloon(t *testing.T) {
 			t.Errorf("balloon %d reaches (%v, %v), past the panel %vx%v",
 				i, points[i].X+s.W, points[i].Y+s.H, panel.W, panel.H)
 		}
+	}
+}
+
+// Wherever the pet is, top to bottom, what it says never covers it, and the
+// window stays on the monitor with the pet where it was.
+func TestThePanelNeverCoversThePet(t *testing.T) {
+	panel := Panel{W: 500, H: 120}
+	for petY := 0.0; petY <= monitor.H-petH; petY += 10 {
+		win := PlaceWindow(300, petY, petW, petH, panel, gap, monitor)
+		if overlaps(win.PanelY, win.PanelY+panel.H, win.PetY, win.PetY+petH) {
+			t.Errorf("pet at y=%v: panel %v..%v covers the pet %v..%v (below=%v)",
+				petY, win.PanelY, win.PanelY+panel.H, win.PetY, win.PetY+petH, win.Below)
+		}
+		if win.Y < monitor.Y || win.Y+win.H > monitor.Y+monitor.H {
+			t.Errorf("pet at y=%v: window %v..%v off the monitor", petY, win.Y, win.Y+win.H)
+		}
+		if got := win.Y + win.PetY; got != petY {
+			t.Errorf("pet at y=%v: drawn at %v", petY, got)
+		}
+	}
+}
+
+// Below is the exception, for when above will not do. Anywhere with room, the
+// panel goes where it always has.
+func TestThePanelGoesBelowOnlyWhenAboveHasNoRoom(t *testing.T) {
+	panel := Panel{W: 500, H: 120}
+	cases := []struct {
+		name  string
+		petY  float64
+		below bool
+	}{
+		{"at the very top", 0, true},
+		{"just short of room above", panel.H + gap - 1, true},
+		{"exactly enough room above", panel.H + gap, false},
+		{"in the middle", monitor.H / 2, false},
+		{"at the bottom", monitor.H - petH, false},
+	}
+	for _, c := range cases {
+		if got := PlaceWindow(300, c.petY, petW, petH, panel, gap, monitor).Below; got != c.below {
+			t.Errorf("%s (y=%v): below = %v, want %v", c.name, c.petY, got, c.below)
+		}
+	}
+}
+
+// On a screen with room on neither side, the panel takes the roomier one: it
+// has to cover something, and covering less is better.
+func TestWithNoRoomEitherSideThePanelTakesTheRoomierOne(t *testing.T) {
+	small := Rect{W: 800, H: 400}
+	panel := Panel{W: 300, H: 150}
+	// 60 above, 140 below: below is roomier.
+	if win := PlaceWindow(100, 60, petW, petH, panel, gap, small); !win.Below {
+		t.Error("60 above and 140 below: want below")
+	}
+	// 140 above, 60 below: above is roomier.
+	if win := PlaceWindow(100, 140, petW, petH, panel, gap, small); win.Below {
+		t.Error("140 above and 60 below: want above")
+	}
+}
+
+// Below the pet the stack is mirrored, so the first balloon — the one with
+// the tail — is still the one nearest the pet.
+func TestOrientMirrorsTheStackBelowThePet(t *testing.T) {
+	sizes := []Size{{W: 200, H: 50}, {W: 180, H: 70}, {W: 220, H: 40}}
+	panel, points := StackBalloons(sizes, 26, 5)
+
+	above := Orient(points, sizes, panel.H, false)
+	for i := range points {
+		if above[i] != points[i] {
+			t.Errorf("above: balloon %d moved from %v to %v", i, points[i], above[i])
+		}
+	}
+
+	below := Orient(points, sizes, panel.H, true)
+	for i := range below {
+		if below[i].X != points[i].X {
+			t.Errorf("below: balloon %d x changed from %v to %v", i, points[i].X, below[i].X)
+		}
+		if below[i].Y < 0 || below[i].Y+sizes[i].H > panel.H {
+			t.Errorf("below: balloon %d spans %v..%v outside a panel %v tall", i, below[i].Y, below[i].Y+sizes[i].H, panel.H)
+		}
+		if i > 0 && below[i].Y <= below[i-1].Y {
+			t.Errorf("below: balloon %d at %v is not further from the pet than %d at %v", i, below[i].Y, i-1, below[i-1].Y)
+		}
+		for j := range i {
+			if overlaps(below[i].Y, below[i].Y+sizes[i].H, below[j].Y, below[j].Y+sizes[j].H) {
+				t.Errorf("below: balloons %d and %d overlap", i, j)
+			}
+		}
+	}
+	if below[0].Y != 0 {
+		t.Errorf("below: the first balloon is at %v, want 0, nearest the pet", below[0].Y)
 	}
 }
