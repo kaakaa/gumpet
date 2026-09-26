@@ -125,8 +125,11 @@ type Game struct {
 	queue   []message.Message
 	// panel and placed are the stacked balloons, rebuilt only when what is on
 	// screen or the settings change.
-	panel      layout.Panel
-	placed     []layout.Point
+	panel  layout.Panel
+	placed []layout.Point
+	// at is where each balloon sits in the panel as drawn: placed, turned the
+	// right way up for where the window put the panel. See [layout.Orient].
+	at         []layout.Point
 	panelDirty bool
 
 	// chatter is the pet talking to itself between messages, or nil when the
@@ -943,6 +946,15 @@ func (g *Game) placeWindow() {
 	}
 	petX, petY := g.walker.Pos()
 	g.win = layout.PlaceWindow(petX, petY, g.petWidth(), g.petHeight(), g.activePanel(), panelGap, g.monitor)
+	// A pet near the top of the screen has its balloons below it, stacked
+	// downwards from the one with the tail.
+	sizes := make([]layout.Size, len(g.placed))
+	for i := range g.placed {
+		if i < len(g.showing) && g.showing[i].balloon != nil {
+			sizes[i] = layout.Size{W: g.showing[i].balloon.width, H: g.showing[i].balloon.height}
+		}
+	}
+	g.at = layout.Orient(g.placed, sizes, g.panel.H, g.win.Below)
 
 	w, h := int(math.Ceil(g.win.W)), int(math.Ceil(g.win.H))
 	if w != g.winW || h != g.winH {
