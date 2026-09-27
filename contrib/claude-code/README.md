@@ -86,3 +86,45 @@ Claude Code fires hooks for a good deal more than this — `SessionStart`,
 `PreCompact`, `PostToolUse` on a matcher of your choosing. The script takes the
 kind of notification as its first argument, so adding one is a case of another
 branch in the `case` statement and another entry in the settings file.
+
+## Answering permission requests from the pet
+
+gumpet can do more than tell you Claude is waiting: when Claude asks whether
+it may run a command or edit a file, the balloon carries **Allow** and **Deny**
+buttons, and pressing one answers Claude directly. You can keep working in
+another window and let Claude through from the pet.
+
+This is `gumpetctl hook permission`, not the script above. Add it as a
+`PermissionRequest` hook:
+
+```json
+{
+  "hooks": {
+    "PermissionRequest": [
+      {
+        "matcher": "*",
+        "hooks": [
+          { "type": "command", "command": "gumpetctl hook permission -timeout 60", "timeout": 90 }
+        ]
+      }
+    ]
+  }
+}
+```
+
+`gumpetctl` has to be on the `PATH` Claude Code runs hooks with; give its full
+path otherwise.
+
+**The pet is a shortcut, never the only way through.** If nobody presses a
+button within `-timeout` seconds, or gumpet is not running, or it is in its
+quiet hours, the hook says nothing and Claude asks in the terminal exactly as it
+would have without it. While the pet is waiting, the terminal prompt has not
+appeared yet — keep `-timeout` as short as you are willing to wait at the
+terminal, and keep the hook's own `timeout` longer than it, or Claude will stop
+the hook before it has had a chance to step aside.
+
+A denied request tells Claude that you refused it from the pet, so it knows a
+person said no rather than something failing. Nothing is added to your
+permission rules either way: each request is asked on its own.
+
+The same command works for Codex; see [contrib/codex](../codex).

@@ -293,3 +293,28 @@ func TestMarkHeld(t *testing.T) {
 		t.Errorf("held=%v shown=%v, want held and never shown", got.Held, got.Shown())
 	}
 }
+
+// A question is waiting until it is answered or ends without one, and the
+// record says which.
+func TestAQuestionRecordsItsAnswer(t *testing.T) {
+	s, _ := newStore(t, config.History{Max: 10})
+	answered := s.AddQuestion(message.Message{Text: "deploy?"}, []string{"Go", "Wait"})
+	unanswered := s.AddQuestion(message.Message{Text: "anyone?"}, []string{"Allow", "Deny"})
+	waiting := s.AddQuestion(message.Message{Text: "still there?"}, []string{"Yes"})
+	s.SetAnswer(answered.ID, "Go")
+	s.SetUnanswered(unanswered.ID)
+
+	byID := map[string]Record{}
+	for _, r := range s.List() {
+		byID[r.ID] = r
+	}
+	if r := byID[answered.ID]; r.Answer != "Go" || r.Unanswered || len(r.Choices) != 2 {
+		t.Errorf("answered = %+v", r)
+	}
+	if r := byID[unanswered.ID]; r.Answer != "" || !r.Unanswered {
+		t.Errorf("unanswered = %+v", r)
+	}
+	if r := byID[waiting.ID]; r.Answer != "" || r.Unanswered {
+		t.Errorf("waiting = %+v, want neither answered nor given up on", r)
+	}
+}

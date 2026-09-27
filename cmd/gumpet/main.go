@@ -13,6 +13,7 @@ import (
 
 	"github.com/hajimehoshi/ebiten/v2"
 
+	"github.com/kaakaa/gumpet/internal/ask"
 	"github.com/kaakaa/gumpet/internal/config"
 	"github.com/kaakaa/gumpet/internal/feed"
 	"github.com/kaakaa/gumpet/internal/history"
@@ -110,6 +111,8 @@ func run() error {
 	srv := server.New(store, hist, monitors, inbox, log)
 	srv.SetRemarks(remarks)
 	srv.SetFeedReports(feedReports)
+	asks := ask.NewBroker()
+	srv.SetAsker(asks)
 	// Restarting ends the context, which ends both the game loop and the
 	// server the same way Ctrl-C does; main starts gumpet again afterwards.
 	restart := func() {
@@ -157,6 +160,7 @@ func run() error {
 		History:     hist,
 		Remarks:     remarks,
 		FeedReports: feedReports,
+		Asks:        asks,
 		Quit:        ctx.Done(),
 		Restart:     restart,
 		Log:         log,

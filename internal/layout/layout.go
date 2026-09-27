@@ -139,6 +139,23 @@ type Point struct {
 	X, Y float64
 }
 
+// Buttons lays a row of buttons out left to right: each as wide as its label
+// plus pad either side, with gap between them. It returns each button's x and
+// width within the row, and the row's total width.
+func Buttons(labelWidths []float64, pad, gap float64) (xs, ws []float64, total float64) {
+	x := 0.0
+	for i, lw := range labelWidths {
+		if i > 0 {
+			x += gap
+		}
+		w := lw + 2*pad
+		xs = append(xs, x)
+		ws = append(ws, w)
+		x += w
+	}
+	return xs, ws, x
+}
+
 // Orient turns a stack laid out by [StackBalloons] the right way up for where
 // the panel ended up. Above the pet it is used as it is. Below the pet it is
 // mirrored top to bottom, so the first balloon — the one with the tail — is
