@@ -35,6 +35,12 @@ type Record struct {
 	// received and kept, and was never going to be said; without this it
 	// would sit on the page as "waiting" for good.
 	Held bool `json:"held,omitempty"`
+	// Choices are the buttons a question offered, and Answer the one pressed.
+	// Unanswered is set once it ended with neither; until one of the two is
+	// set, it is still waiting. Only questions have them. See package ask.
+	Choices    []string `json:"choices,omitempty"`
+	Answer     string   `json:"answer,omitempty"`
+	Unanswered bool     `json:"unanswered,omitempty"`
 	// Seen marks a headline the pet had already said. Only remarks have one.
 	Seen bool `json:"seen,omitempty"`
 	// Link is the article a headline points at. Only remarks have one.
@@ -131,6 +137,41 @@ func (s *Store) AddRemark(r chatter.Remark, seen bool) Record {
 	s.records = append(s.records, rec)
 	s.prune()
 	return rec
+}
+
+// AddQuestion records a question put to the pet, with the choices it offers.
+func (s *Store) AddQuestion(msg message.Message, choices []string) Record {
+	rec := s.Add(msg)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := range s.records {
+		if s.records[i].ID == rec.ID {
+			s.records[i].Choices = append([]string(nil), choices...)
+			rec = s.records[i]
+		}
+	}
+	return rec
+}
+
+// SetAnswer records the choice made to question id.
+func (s *Store) SetAnswer(id, answer string) {
+	s.update(id, func(r *Record) { r.Answer = answer })
+}
+
+// SetUnanswered records that question id ended without a choice.
+func (s *Store) SetUnanswered(id string) {
+	s.update(id, func(r *Record) { r.Unanswered = true })
+}
+
+func (s *Store) update(id string, f func(*Record)) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := range s.records {
+		if s.records[i].ID == id {
+			f(&s.records[i])
+			return
+		}
+	}
 }
 
 // MarkHeld notes that a message arrived while the pet was keeping quiet, and

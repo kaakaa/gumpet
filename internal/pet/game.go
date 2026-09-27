@@ -18,6 +18,7 @@ import (
 
 	"github.com/hajimehoshi/ebiten/v2"
 
+	"github.com/kaakaa/gumpet/internal/ask"
 	"github.com/kaakaa/gumpet/internal/chatter"
 	"github.com/kaakaa/gumpet/internal/config"
 	"github.com/kaakaa/gumpet/internal/display"
@@ -54,6 +55,9 @@ type Options struct {
 	// FeedReports is told how every read of a feed went, for the messages
 	// page. It may be nil.
 	FeedReports *feed.Reports
+	// Asks brings questions to put on screen as balloons with buttons, and
+	// takes the answers. It may be nil.
+	Asks *ask.Broker
 	// Quit ends the game loop when it is closed.
 	Quit <-chan struct{}
 	// Restart stops gumpet and starts it again, the way an update does. The
@@ -93,6 +97,7 @@ type Game struct {
 	remarks *history.Store
 	// feedReports: see Options.FeedReports.
 	feedReports *feed.Reports
+	asks        *ask.Broker
 	quit        <-chan struct{}
 	restart     func()
 	log         *slog.Logger
@@ -206,6 +211,7 @@ func New(o Options) *Game {
 		history:     o.History,
 		remarks:     o.Remarks,
 		feedReports: o.FeedReports,
+		asks:        o.Asks,
 		quit:        o.Quit,
 		restart:     o.Restart,
 		log:         o.Log,
@@ -270,6 +276,7 @@ func (g *Game) Update() error {
 	g.drainUpdates()
 	g.ensureFonts()
 	g.advanceQuiet()
+	g.drainAsks()
 	g.drainInbox()
 	g.advanceMessages(dt)
 	g.advanceChatter(dt)
@@ -464,6 +471,82 @@ func (g *Game) drainInbox() {
 	}
 }
 
+// drainAsks puts new questions on screen and takes down withdrawn ones.
+//
+// A question goes straight up, rather than into the queue behind messages:
+// whoever asked is waiting on it. During quiet hours it is declined at once
+// instead, so that an agent falls back to asking in its own terminal without
+// waiting out its timeout first.
+func (g *Game) drainAsks() {
+	if g.asks == nil {
+		return
+	}
+	for {
+		select {
+		case q := <-g.asks.Questions():
+			if g.hush.Quiet() {
+				g.asks.Decline(q.ID)
+				continue
+			}
+			labels := make([]string, len(q.Choices))
+			for i, c := range q.Choices {
+				labels[i] = c
+				if q.Localize {
+					labels[i] = g.choiceLabel(c)
+				}
+			}
+			g.showing = append(g.showing, shown{
+				msg: message.Message{
+					ID: q.ID, Text: q.Text, Title: q.Title, Level: q.Level,
+					At: time.Now(), AskID: q.ID, Choices: labels,
+				},
+				// Said all at once: the buttons are what matters, and they
+				// should not wait for the text to finish arriving.
+				typed: math.MaxInt32,
+			})
+			if g.history != nil {
+				g.history.MarkShown(q.ID)
+			}
+			g.panelDirty = true
+			g.resetAnimation()
+		case id := <-g.asks.Withdrawn():
+			g.takeDownQuestion(id)
+		default:
+			return
+		}
+	}
+}
+
+// choiceLabel says one of the default choices in the pet's language.
+func (g *Game) choiceLabel(c string) string {
+	switch c {
+	case "Allow":
+		return g.tr("Allow")
+	case "Deny":
+		return g.tr("Deny")
+	}
+	return c
+}
+
+// answer gives the choice at index as the answer to balloon i's question, and
+// takes the balloon down.
+func (g *Game) answer(i, index int) {
+	if g.asks != nil {
+		g.asks.Answer(g.showing[i].msg.AskID, index)
+	}
+	g.dismiss(i)
+}
+
+// takeDownQuestion removes the balloon asking question id, if it is up.
+func (g *Game) takeDownQuestion(id string) {
+	for i := range g.showing {
+		if g.showing[i].msg.AskID == id {
+			g.dismiss(i)
+			return
+		}
+	}
+}
+
 // setQuietWindow adopts the configured window. The config has already been
 // validated, so a window that will not parse means the file changed under us;
 // having no quiet hours is the safe reading of that, since the alternative is
@@ -547,6 +630,13 @@ func (g *Game) advanceMessages(dt time.Duration) {
 
 		kept := g.showing[:0]
 		for _, s := range g.showing {
+			// A question stays until it is answered or withdrawn: someone is
+			// waiting on it, and it timing out here would only make them wait
+			// for nothing.
+			if s.msg.AskID != "" {
+				kept = append(kept, s)
+				continue
+			}
 			// A message that is still being said has not started its time on
 			// screen yet. Counting it down while it types would give a long
 			// message less time to be read than a short one.

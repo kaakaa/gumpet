@@ -107,6 +107,7 @@ The server listens on `127.0.0.1:8787` by default.
 | `GET`  | `/api/v1/messages`   | — (what has been received, newest first) |
 | `GET`  | `/api/v1/config`     | —                                        |
 | `PUT`  | `/api/v1/config`     | A whole or partial config, as JSON       |
+| `POST` | `/api/v1/ask`        | `{"text": "…", "choices": ["Go", "Wait"], "timeout_sec": 60}` — waits, then answers `{"answered": true, "choice": "Go"}` |
 | `GET`  | `/api/v1/healthz`    | —                                        |
 | `GET`  | `/`                  | the settings page                        |
 | `GET`  | `/messages`          | the messages page                        |
@@ -229,6 +230,22 @@ limit bites first wins.
 [Claude Code](https://claude.com/claude-code) at your pet: the gopher asks you
 Claude's questions and tells you when it has finished working, so you can leave
 the terminal and still know when you are needed.
+
+It can also answer for you. As a `PermissionRequest` hook,
+`gumpetctl hook permission` puts Claude's request to run a command or edit a
+file on the pet with **Allow** and **Deny** buttons, and the one you press is
+Claude's answer. [Codex](contrib/codex) uses the same hook format, so the same
+command works there. If nobody answers, or gumpet is not running, the agent
+asks in its terminal as it always did.
+
+`gumpetctl ask` puts any question to the pet the same way, for your own
+scripts:
+
+```
+gumpetctl ask -choices "Deploy,Wait" "main is green. Deploy?"
+```
+
+It prints the choice, or exits 3 if nobody answered.
 
 ## The menu
 

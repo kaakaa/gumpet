@@ -246,6 +246,10 @@
   /* A headline the pet had said already: faint, like the balloon draws it,
      so the new ones are what the eye lands on. */
   .badge.again { background: var(--line); color: var(--muted); }
+  /* A question's fate: answered like something said, unanswered like
+     something held, and still waiting like a message in the queue. */
+  .badge.answered { background: var(--shown-bg); color: var(--shown-ink); }
+  .badge.unanswered { background: var(--line); color: var(--muted); }
   li.seen .text { color: var(--muted); }
 
   /* A message's level is shown as a stripe down its left edge rather than
@@ -585,9 +589,16 @@
         // A remark is on screen the moment it is said, so "waiting" would
         // never apply and "shown" would say nothing.
         var state = msg.shown_at ? "shown" : (msg.held ? "held" : "waiting");
+        var label = state;
+        if (msg.choices) {
+          // A question: what matters is what was answered.
+          state = msg.answer ? "answered" : (msg.unanswered ? "unanswered" : "waiting");
+          label = msg.answer ? msg.answer : (msg.unanswered ? "no answer" : "asking");
+        }
         var badge = document.createElement("span");
         badge.className = "badge " + state;
-        badge.textContent = state;
+        // textContent: an answer is one of the choices somebody sent.
+        badge.textContent = label;
         li.appendChild(badge);
       }
 
@@ -597,7 +608,9 @@
         when.textContent = "said " + ago(msg.shown_at) +
           (msg.published ? ", published " + new Date(msg.published).toLocaleString() : "");
       } else {
-        when.textContent = msg.shown_at
+        when.textContent = msg.choices
+          ? "asked " + ago(msg.queued_at) + " · " + msg.choices.join(" / ")
+          : msg.shown_at
           ? "received " + ago(msg.queued_at) + ", shown " + ago(msg.shown_at)
           : msg.held
             ? "received " + ago(msg.queued_at) + ", during quiet hours"
