@@ -104,6 +104,10 @@ behavior:
   # Hop now and then while on the floor. Only applies to the styles of roaming
   # that have a floor: "none" and "horizontal".
   jump: {{ .Behavior.Jump }}
+  # Move when a message arrives, by how serious it is: shiver at an error, hop
+  # at a warning, jump at a success. Ordinary messages and the pet's own
+  # remarks leave it be.
+  react: {{ .Behavior.React }}
   # A time of day when the pet says nothing. Messages still arrive and are kept
   # on the messages page; the pet just does not say them, or anything of its
   # own. When the quiet ends it says once how many came in. "HH:MM", local
