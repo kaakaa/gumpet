@@ -1,10 +1,12 @@
-// Command gumpetctl sends a message to a running gumpet, and opens its
-// settings page.
+// Command gumpetctl sends a message to a running gumpet, asks it questions,
+// and opens its settings page.
 //
 //	gumpetctl おなかすいた
 //	echo "build finished" | gumpetctl -
 //	gumpetctl -d 30 "the deploy is done"
 //	gumpetctl -settings
+//	gumpetctl ask -choices "Deploy,Wait" "main is green. Deploy?"
+//	gumpetctl hook permission   (a PermissionRequest hook for Claude Code and Codex)
 package main
 
 import (
@@ -23,6 +25,16 @@ import (
 )
 
 func main() {
+	// Subcommands come first. A message that happens to be one of these words
+	// can still be sent after "--".
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case "ask":
+			os.Exit(runAsk(os.Args[2:], os.Stdout, os.Stderr))
+		case "hook":
+			os.Exit(runHook(os.Args[2:], os.Stdin, os.Stdout, os.Stderr))
+		}
+	}
 	if err := run(); err != nil {
 		fmt.Fprintf(os.Stderr, "gumpetctl: %v\n", err)
 		os.Exit(1)
@@ -86,7 +98,9 @@ func usage() {
 	fmt.Fprintf(flag.CommandLine.Output(),
 		"usage: gumpetctl [flags] <message>\n"+
 			"       gumpetctl [flags] -          (read the message from stdin)\n"+
-			"       gumpetctl -settings          (open the settings page)\n\n")
+			"       gumpetctl -settings          (open the settings page)\n"+
+			"       gumpetctl ask [flags] <question>\n"+
+			"       gumpetctl hook permission    (hook for Claude Code and Codex)\n\n")
 	flag.PrintDefaults()
 }
 

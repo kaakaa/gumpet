@@ -34,6 +34,12 @@ const (
 	stampTextScale = 0.7
 	// stampGap keeps the timestamp clear of a heading sharing its line.
 	stampGap = 10.0
+	// A question's buttons: how far their labels sit from their edges, the
+	// space between them, and the space between them and the text above.
+	buttonPadX = 12.0
+	buttonPadY = 5.0
+	buttonGap  = 8.0
+	buttonTop  = 8.0
 	// copyFlash is how long a copied balloon's border stays lit. Long enough
 	// to catch from the corner of an eye, short enough not to look like a
 	// change of level.
@@ -46,6 +52,11 @@ var (
 	panelFill   = color.NRGBA{R: 0xff, G: 0xff, B: 0xff, A: 0xf7}
 	panelBorder = color.NRGBA{R: 0x33, G: 0x33, B: 0x33, A: 0xff}
 	textColor   = color.NRGBA{R: 0x1a, G: 0x1a, B: 0x1a, A: 0xff}
+	// The first button is the answer the eye should land on, in the gopher's
+	// blue; the others are plain.
+	primaryFill   = color.NRGBA{R: 0x00, G: 0x7d, B: 0x9c, A: 0xff}
+	primaryText   = color.NRGBA{R: 0xff, G: 0xff, B: 0xff, A: 0xff}
+	secondaryFill = color.NRGBA{R: 0xe6, G: 0xe6, B: 0xe3, A: 0xff}
 	// seenColor is the text of a headline the pet has said before: still
 	// readable, but plainly not the news the dark text is.
 	seenColor   = color.NRGBA{R: 0x80, G: 0x80, B: 0x80, A: 0xff}
@@ -83,6 +94,8 @@ func colorsFor(level message.Level) (border, accent color.NRGBA) {
 type balloon struct {
 	// seen is a headline said before, drawn fainter. See [message.Message.Seen].
 	seen bool
+	// buttons are a question's answers, relative to the balloon's top-left.
+	buttons []button
 	// title is the heading above the text, empty for most messages.
 	title []richtext.Line
 	lines []richtext.Line
@@ -168,6 +181,25 @@ func (g *Game) layoutBalloon(msg message.Message) *balloon {
 	b.width = b.textW + 2*balloonPadding
 	b.height = b.headH + b.textH + 2*balloonPadding
 
+	// A question's buttons go in a row under the text, and the balloon grows
+	// to hold them.
+	if len(msg.Choices) > 0 {
+		widths := make([]float64, len(msg.Choices))
+		for i, c := range msg.Choices {
+			widths[i] = f.Advance(c)
+		}
+		xs, ws, rowW := layout.Buttons(widths, buttonPadX, buttonGap)
+		b.width = max(b.width, rowW+2*balloonPadding)
+		top := b.height - balloonPadding + buttonTop
+		h := f.lineHeight() + 2*buttonPadY
+		for i, c := range msg.Choices {
+			b.buttons = append(b.buttons, button{
+				label: c, x: balloonPadding + xs[i], y: top, w: ws[i], h: h, index: i,
+			})
+		}
+		b.height = top + h + balloonPadding
+	}
+
 	if b.stamp != "" {
 		b.stampX = b.width - balloonPadding - stampW
 		// Sit the stamp on the baseline of the heading's *first* line, rather
@@ -181,6 +213,13 @@ func (g *Game) layoutBalloon(msg message.Message) *balloon {
 		b.stampY = balloonPadding + firstLineH - g.fonts.stamp.lineHeight()
 	}
 	return b
+}
+
+// button is one of a question's answers, drawn in its balloon.
+type button struct {
+	label      string
+	x, y, w, h float64
+	index      int
 }
 
 // linkRect is where one link sits inside a balloon, relative to the balloon's
@@ -317,6 +356,17 @@ func (g *Game) drawBalloons(screen *ebiten.Image) {
 		}
 		g.drawRichText(screen, lines, (x+balloonPadding)*ds, (y+balloonPadding+b.headH)*ds,
 			g.fonts.message, ink)
+		for _, bt := range b.buttons {
+			fill, text := secondaryFill, textColor
+			if bt.index == 0 {
+				fill, text = primaryFill, primaryText
+			}
+			path := roundedRectPath(float32((x+bt.x)*ds), float32((y+bt.y)*ds),
+				float32(bt.w*ds), float32(bt.h*ds), float32(6*ds))
+			fillPath(screen, path, fill)
+			g.drawText(screen, []string{bt.label}, (x+bt.x+buttonPadX)*ds, (y+bt.y+buttonPadY)*ds,
+				g.fonts.message, text)
+		}
 	}
 }
 
@@ -408,6 +458,13 @@ func (g *Game) drawWindowBounds(screen *ebiten.Image) {
 	ds := g.deviceScale
 	vector.StrokeRect(screen, 0, 0,
 		float32(g.win.W*ds), float32(g.win.H*ds), float32(ds), debugBorder, false)
+}
+
+// fillPath fills path with one colour.
+func fillPath(screen *ebiten.Image, path *vector.Path, fill color.NRGBA) {
+	op := &vector.DrawPathOptions{AntiAlias: true}
+	op.ColorScale.ScaleWithColor(fill)
+	vector.FillPath(screen, path, &vector.FillOptions{FillRule: vector.FillRuleNonZero}, op)
 }
 
 func fillAndStroke(screen *ebiten.Image, path *vector.Path, ds float64, border color.NRGBA) {

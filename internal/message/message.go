@@ -66,6 +66,10 @@ type Message struct {
 	// Seen marks a headline the pet has already said while running, so the
 	// balloon can say it is a repeat. See [chatter.Seen].
 	Seen bool
+	// AskID makes the balloon a question: Choices are drawn as buttons, and
+	// the one pressed is the answer to question AskID. See package ask.
+	AskID   string
+	Choices []string
 }
 
 // Copied is what the balloon puts on the clipboard: the heading, if there is

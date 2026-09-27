@@ -261,8 +261,18 @@ func (g *Game) handleInput(dt time.Duration) error {
 			g.revealAll(onBalloon)
 			return nil
 		}
+		if index := g.buttonAt(onBalloon, px, py); index >= 0 {
+			g.answer(onBalloon, index)
+			return nil
+		}
 		if url := g.linkAt(onBalloon, px, py); url != "" {
 			g.openLink(url)
+			return nil
+		}
+		// A question is answered with its buttons and nothing else: a click
+		// meant for the text must not throw the question away, since someone
+		// is waiting on it.
+		if g.showing[onBalloon].msg.AskID != "" {
 			return nil
 		}
 		// Clicking a balloon takes it down, so a message that has been read
@@ -426,6 +436,25 @@ func (g *Game) balloonAt(px, py float64) int {
 		y := g.win.PanelY + g.at[i].Y
 		if px >= x && px < x+b.width && py >= y && py < y+b.height {
 			return i
+		}
+	}
+	return -1
+}
+
+// buttonAt returns the index of the answer under a point in balloon i, or -1.
+func (g *Game) buttonAt(i int, px, py float64) int {
+	if i < 0 || i >= len(g.showing) || i >= len(g.at) {
+		return -1
+	}
+	b := g.showing[i].balloon
+	if b == nil {
+		return -1
+	}
+	x := g.win.PanelX + g.at[i].X
+	y := g.win.PanelY + g.at[i].Y
+	for _, bt := range b.buttons {
+		if px >= x+bt.x && px < x+bt.x+bt.w && py >= y+bt.y && py < y+bt.y+bt.h {
+			return bt.index
 		}
 	}
 	return -1

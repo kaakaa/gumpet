@@ -379,3 +379,19 @@ func TestOrientMirrorsTheStackBelowThePet(t *testing.T) {
 		t.Errorf("below: the first balloon is at %v, want 0, nearest the pet", below[0].Y)
 	}
 }
+
+func TestButtonsSitSideBySideWithoutOverlapping(t *testing.T) {
+	xs, ws, total := Buttons([]float64{40, 60, 20}, 10, 8)
+	want := []struct{ x, w float64 }{{0, 60}, {68, 80}, {156, 40}}
+	for i, w := range want {
+		if xs[i] != w.x || ws[i] != w.w {
+			t.Errorf("button %d at %v, %v wide; want %v, %v", i, xs[i], ws[i], w.x, w.w)
+		}
+	}
+	if total != 196 {
+		t.Errorf("row is %v wide, want 196", total)
+	}
+	if xs, ws, total := Buttons(nil, 10, 8); xs != nil || ws != nil || total != 0 {
+		t.Error("no labels should make no buttons and no width")
+	}
+}

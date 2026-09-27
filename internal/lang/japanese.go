@@ -21,6 +21,10 @@ var japanese = map[string]string{
 	"perimeter":  "縁を回る",
 	"wander":     "歩き回る",
 
+	// A question's buttons, when the asker left the choices to the pet.
+	"Allow": "許可",
+	"Deny":  "拒否",
+
 	// What the balloons say about themselves.
 	"seen": "既読",
 

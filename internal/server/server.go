@@ -17,6 +17,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/kaakaa/gumpet/internal/ask"
 	"github.com/kaakaa/gumpet/internal/config"
 	"github.com/kaakaa/gumpet/internal/display"
 	"github.com/kaakaa/gumpet/internal/feed"
@@ -46,6 +47,8 @@ type Server struct {
 	remarks *history.Store
 	// feedReports says how the last read of each feed went. It may be nil.
 	feedReports *feed.Reports
+	// asks carries questions to the pet and answers back. It may be nil.
+	asks *ask.Broker
 	// monitors is what the machine reported at startup, so the settings page
 	// can name the displays rather than asking for a number on faith.
 	monitors []display.Monitor
@@ -102,6 +105,7 @@ func New(store *settings.Store, hist *history.Store, monitors []display.Monitor,
 	mux.HandleFunc("GET /api/v1/config", s.authed(s.handleGetConfig))
 	mux.HandleFunc("PUT /api/v1/config", s.authed(s.handlePutConfig))
 	mux.HandleFunc("GET /api/v1/healthz", s.handleHealth)
+	mux.HandleFunc("POST /api/v1/ask", s.authed(s.handleAsk))
 	mux.HandleFunc("GET /api/v1/feeds", s.authed(s.handleFeeds))
 	mux.HandleFunc("GET /api/v1/feeds/source", s.authed(s.handleFeedSource))
 	mux.HandleFunc("GET /api/v1/update", s.authed(s.handleCheckUpdate))
@@ -130,6 +134,9 @@ type Updater interface {
 func (s *Server) SetUpdater(u Updater, restart func()) {
 	s.updater, s.restart = u, restart
 }
+
+// SetAsker lets the API put questions to the pet. See handleAsk.
+func (s *Server) SetAsker(b *ask.Broker) { s.asks = b }
 
 // SetFeedReports lets the messages page show how each feed was last read, and
 // what it served.
@@ -263,6 +270,91 @@ func (s *Server) handleApplyUpdate(w http.ResponseWriter, r *http.Request) {
 			time.Sleep(restartDelay)
 			s.restart()
 		}()
+	}
+}
+
+// Questions wait for a person, and a person may be away. The default is short
+// enough that an agent falling back to its own prompt is not kept waiting
+// long; the limit keeps a forgotten request from holding a balloon up all day.
+const (
+	defaultAskTimeout = time.Minute
+	maxAskTimeout     = 10 * time.Minute
+	maxChoices        = 4
+	maxChoiceLabel    = 40
+)
+
+type askRequest struct {
+	Text       string   `json:"text"`
+	Title      string   `json:"title"`
+	Level      string   `json:"level"`
+	Choices    []string `json:"choices"`
+	TimeoutSec float64  `json:"timeout_sec"`
+}
+
+// handleAsk puts a question to the pet and answers with the choice made. It
+// holds the request open until then: the asker — usually an agent's hook —
+// is waiting on the answer anyway, and a request that simply returns it is
+// something curl and a shell script can use.
+//
+// No answer is reported as such, not as an error: the asker's own fallback is
+// the right thing to happen then, and it needs to tell that from gumpet being
+// broken.
+func (s *Server) handleAsk(w http.ResponseWriter, r *http.Request) {
+	if s.asks == nil {
+		writeError(w, http.StatusNotFound, "this gumpet does not take questions")
+		return
+	}
+	var req askRequest
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodyBytes)).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "body is not valid JSON: "+err.Error())
+		return
+	}
+	req.Text = strings.TrimSpace(req.Text)
+	if req.Text == "" {
+		writeError(w, http.StatusBadRequest, "text must not be empty")
+		return
+	}
+	if len(req.Choices) > maxChoices {
+		writeError(w, http.StatusBadRequest, fmt.Sprintf("at most %d choices fit on a balloon", maxChoices))
+		return
+	}
+	for _, c := range req.Choices {
+		if strings.TrimSpace(c) == "" || len([]rune(c)) > maxChoiceLabel {
+			writeError(w, http.StatusBadRequest, fmt.Sprintf("a choice must be 1 to %d characters", maxChoiceLabel))
+			return
+		}
+	}
+	timeout := defaultAskTimeout
+	if req.TimeoutSec > 0 {
+		timeout = min(time.Duration(req.TimeoutSec*float64(time.Second)), maxAskTimeout)
+	}
+	level := message.LevelWarn
+	if req.Level != "" {
+		level = message.ParseLevel(req.Level)
+	}
+
+	choices := req.Choices
+	if len(choices) == 0 {
+		choices = ask.DefaultChoices
+	}
+	rec := s.history.AddQuestion(message.Message{Text: req.Text, Title: strings.TrimSpace(req.Title), Level: level}, choices)
+
+	ctx, cancel := context.WithTimeout(r.Context(), timeout)
+	defer cancel()
+	a, err := s.asks.Ask(ctx, ask.Question{
+		ID: rec.ID, Title: rec.Title, Text: rec.Text, Level: level, Choices: req.Choices,
+	})
+	switch {
+	case errors.Is(err, ask.ErrBusy):
+		writeError(w, http.StatusServiceUnavailable, "the pet is not taking questions right now")
+	case errors.Is(err, ask.ErrNoAnswer):
+		s.history.SetUnanswered(rec.ID)
+		writeJSON(w, http.StatusOK, map[string]any{"id": rec.ID, "answered": false})
+	case err != nil:
+		writeError(w, http.StatusInternalServerError, err.Error())
+	default:
+		s.history.SetAnswer(rec.ID, a.Label)
+		writeJSON(w, http.StatusOK, map[string]any{"id": rec.ID, "answered": true, "index": a.Index, "choice": a.Label})
 	}
 }
 
