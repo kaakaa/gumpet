@@ -216,6 +216,9 @@ type Behavior struct {
 	// Jump lets the pet hop now and then while it is on the floor, which is
 	// most of what stops a walk from reading as a patrol.
 	Jump bool `yaml:"jump" json:"jump"`
+	// React has the pet move when a message arrives, by how serious it is: a
+	// shiver for an error, a hop for a warning, a jump for a success.
+	React bool `yaml:"react" json:"react"`
 	// Chatter is the pet talking to itself when nobody has sent it anything.
 	Chatter Chatter `yaml:"chatter" json:"chatter"`
 	// Quiet is a time of day when the pet says nothing.
@@ -381,6 +384,10 @@ func Default() Config {
 			Roam:        RoamHorizontal,
 			Speed:       45,
 			Jump:        true,
+			// On, because it is how a message's seriousness reaches someone
+			// not looking at the balloon; ordinary messages still leave the
+			// pet be.
+			React: true,
 			// No quiet window: a pet that goes silent without being asked
 			// would look broken.
 			Quiet: Quiet{From: "", To: ""},

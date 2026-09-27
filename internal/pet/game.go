@@ -31,6 +31,7 @@ import (
 	"github.com/kaakaa/gumpet/internal/message"
 	"github.com/kaakaa/gumpet/internal/petpack"
 	"github.com/kaakaa/gumpet/internal/quiet"
+	"github.com/kaakaa/gumpet/internal/react"
 	"github.com/kaakaa/gumpet/internal/roam"
 	"github.com/kaakaa/gumpet/internal/settings"
 )
@@ -143,6 +144,10 @@ type Game struct {
 	// seen is which headlines have been said already, so a repeat can be
 	// told from a new one.
 	seen chatter.Seen
+	// reaction is how the pet is moving in answer to a message just shown,
+	// and reactFor how long it has been at it. See package react.
+	reaction react.Kind
+	reactFor time.Duration
 	// hush follows the quiet window. wasQuiet is what it said last frame, so
 	// the moment quiet begins can be told from every frame after it.
 	hush     quiet.Hush
@@ -288,6 +293,7 @@ func (g *Game) Update() error {
 		g.walker.Step(dt)
 	}
 	g.advanceAnimation(dt)
+	g.advanceReaction(dt)
 	g.rebuildPanel()
 	g.placeWindow()
 	return nil
@@ -507,6 +513,8 @@ func (g *Game) drainAsks() {
 			if g.history != nil {
 				g.history.MarkShown(q.ID)
 			}
+			// Someone is waiting on this one, which is worth a hop at least.
+			g.react(react.For(q.Level))
 			g.panelDirty = true
 			g.resetAnimation()
 		case id := <-g.asks.Withdrawn():
@@ -658,8 +666,10 @@ func (g *Game) advanceMessages(dt time.Duration) {
 		g.dropIdleTalk()
 	}
 
+	arrived := react.None
 	for len(g.showing) < g.cfg.Message.MaxVisible && len(g.queue) > 0 {
 		msg := g.queue[0]
+		arrived = react.Stronger(arrived, react.For(msg.Level))
 		g.queue = g.queue[1:]
 
 		remaining := msg.Duration
@@ -673,8 +683,37 @@ func (g *Game) advanceMessages(dt time.Duration) {
 			g.history.MarkShown(msg.ID)
 		}
 	}
+	g.react(arrived)
 	if g.panelDirty {
 		g.resetAnimation()
+	}
+}
+
+// react starts the pet moving in answer to a message just shown. A stronger
+// reaction replaces a weaker one under way; a weaker one leaves it be. Held
+// by the cursor, the pet does not react: it would jerk out from under it.
+func (g *Game) react(k react.Kind) {
+	if k == react.None || !g.cfg.Behavior.React || g.drag.Pressed() {
+		return
+	}
+	if g.reaction != react.None && react.Stronger(g.reaction, k) == g.reaction {
+		return
+	}
+	g.reaction, g.reactFor = k, 0
+}
+
+// advanceReaction moves a reaction on, and ends it when it is over.
+func (g *Game) advanceReaction(dt time.Duration) {
+	if g.reaction == react.None {
+		return
+	}
+	if g.drag.Pressed() {
+		g.reaction = react.None
+		return
+	}
+	g.reactFor += dt
+	if _, _, done := react.Offset(g.reaction, g.reactFor); done {
+		g.reaction = react.None
 	}
 }
 
@@ -1035,6 +1074,11 @@ func (g *Game) placeWindow() {
 			"size", fmt.Sprintf("%.0fx%.0f", g.monitor.W, g.monitor.H))
 	}
 	petX, petY := g.walker.Pos()
+	// A reaction moves where the pet is drawn, not where it is walking: the
+	// window goes with it, so nothing is clipped, and when the reaction is
+	// over the pet is exactly where its walk had got to.
+	dx, dy, _ := react.Offset(g.reaction, g.reactFor)
+	petX, petY = petX+dx, petY+dy
 	g.win = layout.PlaceWindow(petX, petY, g.petWidth(), g.petHeight(), g.activePanel(), panelGap, g.monitor)
 	// A pet near the top of the screen has its balloons below it, stacked
 	// downwards from the one with the tail.
