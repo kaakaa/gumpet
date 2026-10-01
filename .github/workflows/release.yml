@@ -92,7 +92,7 @@ jobs:
       - name: Package
         run: |
           set -euo pipefail
-          cp README.md LICENSE out/
+          cp README.md README.ja.md LICENSE out/
           cp assets/gopher/NOTICE out/NOTICE-gopher
           mkdir -p dist
           NAME="gumpet_${GITHUB_REF_NAME}_${{ matrix.name }}"
@@ -146,7 +146,7 @@ jobs:
       - name: Package
         run: |
           set -euo pipefail
-          cp README.md LICENSE out/
+          cp README.md README.ja.md LICENSE out/
           cp assets/gopher/NOTICE out/NOTICE-gopher
           mkdir -p dist
           tar -czf "dist/gumpet_${GITHUB_REF_NAME}_darwin_universal.tar.gz" -C out .
