@@ -1,5 +1,7 @@
 # gumpet
 
+**English** | [日本語](README.ja.md)
+
 <p align="center">
   <img src="docs/images/demo.gif" width="600" alt="A gopher walking along the bottom of the screen, saying a message in a speech balloon, then a stack of two, then a question with Allow and Deny buttons">
 </p>
