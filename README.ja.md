@@ -139,7 +139,8 @@ gumpetctl ask -choices "Deploy,Wait" "main is green. Deploy?"
 
 ## ライセンス
 
-MIT — [LICENSE](LICENSE) を見てください。
+MIT — [LICENSE](LICENSE) を見てください。gumpet が使っているライブラリ、フォント、絵にはそれぞれの
+ライセンスがあり、各リリースのアーカイブに入っている `THIRD_PARTY_NOTICES` にまとめています。
 
 ### 絵について
 

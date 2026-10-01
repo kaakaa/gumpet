@@ -39,6 +39,35 @@ The images in the README are made the same way: rendered offscreen from the
 bundled artwork with the pet's own balloon geometry, colours and font, and its
 own walking and reaction code. They are not screen recordings.
 
+## Third-party licences
+
+Everything linked into gumpet has to be under a licence that an MIT-licensed
+binary can carry by copying notices: Apache-2.0, BSD-2-Clause, BSD-3-Clause,
+MIT, ISC or Unlicense. [go-licenses](https://github.com/google/go-licenses)
+checks that on every pull request, and again before a release, for each
+platform released — the modules differ between them.
+
+```
+go install github.com/google/go-licenses/v2@v2.0.1
+make licenses     # the check
+make notices      # bin/THIRD_PARTY_NOTICES for this machine
+```
+
+A dependency under anything else fails the check. That needs a decision — a
+different dependency, or a different way of shipping — not a longer list in
+[`.github/licenses/check.sh`](.github/licenses/check.sh).
+
+Every release archive carries a `THIRD_PARTY_NOTICES` built by
+[`.github/licenses/notices.sh`](.github/licenses/notices.sh) for that platform:
+each module's licence text and any NOTICE file, Go's own licence, the fonts
+compiled in with the bitmap font, and the bundled artwork's NOTICE files.
+
+The fonts are the one part kept by hand, in
+[`.github/licenses/fonts.txt`](.github/licenses/fonts.txt).
+`hajimehoshi/bitmapfont` embeds glyphs from several fonts under their own
+licences but lists them in its README, where go-licenses cannot see them. When
+bitmapfont is upgraded, compare its README's "Sources" with that file.
+
 ## Issues become pull requests
 
 Opening an issue starts [a workflow](.github/workflows/implement-issue.yml) that
