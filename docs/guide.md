@@ -103,7 +103,8 @@ the file, comments and all. The settings worth knowing about:
 | `behavior.jump` | `true` | Hop now and then while on the floor |
 | `behavior.react` | `true` | Move when a message arrives, by how serious it is |
 | `behavior.quiet.from` / `.to` | *(empty)* | A time of day, `HH:MM`, when the pet says nothing |
-| `behavior.chatter.enabled` | `false` | Let the pet talk to itself between messages |
+| `behavior.chatter.enabled` | `true` | Let the pet talk to itself between messages |
+| `behavior.chatter.feeds` | Hacker News | RSS or Atom feeds whose headlines it reads out; empty for none |
 | `pet.source` | `gopher` | A bundled pet by name, or your own artwork — see below |
 | `pet.scale` | 1.0 | Relative to how the artwork is meant to be drawn |
 | `pet.smooth` | `auto` | `auto`, `on` or `off` — how the artwork is enlarged |
@@ -197,25 +198,33 @@ limit bites first wins.
 
 ## Talking to itself
 
-Turn on `behavior.chatter.enabled` and the pet mutters something every
-`interval_sec` or so when nobody has sent it anything — from the list gumpet
-ships with, or from a file of your own sayings in `chatter.source`.
+When nobody has sent it anything, the pet says something of its own every
+`interval_sec` or so. Out of the box that is a headline from
+[Hacker News](https://news.ycombinator.com/), with the feed's name above it and
+the link clickable.
 
-Or give it RSS or Atom feeds in `chatter.feeds`, and it reads out headlines
-instead, with the feed's name above and the link clickable:
+`chatter.feeds` takes up to ten RSS or Atom feeds, in place of or alongside
+Hacker News:
 
 ```yaml
 behavior:
   chatter:
-    enabled: true
     feeds:
+      - name: Hacker News
+        url: https://news.ycombinator.com/rss
       - name: Go Blog
         url: https://go.dev/blog/feed.atom
 ```
 
-Feeds are the only thing that makes gumpet connect out on its own; with none
-set, which is the default, it makes no outgoing requests at all. Only the
-headlines are fetched, never the articles.
+Empty the list and the pet mutters from the sayings gumpet ships with instead,
+or from a file of your own in `chatter.source`. Turn
+`behavior.chatter.enabled` off for a pet that only speaks when spoken to.
+
+Feeds are the only thing that makes gumpet connect out on its own; with the
+list empty it makes no outgoing requests at all, and an emptied list stays
+empty. Only the headlines are fetched, never the articles. A config file
+written before this was the default keeps what it says — usually chatter off
+and no feeds.
 
 ## Agents and questions
 
