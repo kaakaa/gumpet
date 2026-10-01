@@ -37,14 +37,39 @@ which does the same thing on Windows only.
 
 Download the archive for your platform from the [releases page][releases] and
 put `gumpet` and `gumpetctl` somewhere on your `PATH`. The macOS build is a
-universal binary for Apple Silicon and Intel. Nothing is code-signed, so on
-macOS clear the quarantine first:
+universal binary for Apple Silicon and Intel.
+
+### The first run warns you
+
+Nothing is code-signed, so the first time you run a downloaded copy the system
+says it cannot vouch for it. That is expected; this is how to get past it, once.
+
+**macOS** says the app cannot be opened because Apple cannot check it for
+malicious software. Clear the quarantine flag before running it:
 
 ```
 xattr -d com.apple.quarantine gumpet gumpetctl
 ```
 
-Or with Go 1.25 or later:
+Or try to open it once, then press **Open Anyway** under
+**System Settings → Privacy & Security**.
+
+**Windows** shows SmartScreen's *Windows protected your PC*. Choose
+**More info**, then **Run anyway** — or unblock both files from PowerShell
+beforehand:
+
+```
+Unblock-File .\gumpet.exe, .\gumpetctl.exe
+```
+
+**Linux** has nothing to say about it.
+
+Updates installed from the settings page do not warn again: gumpet downloads
+them itself, so they never carry the browser's "came from the internet" mark.
+
+### Other ways to install
+
+With Go 1.25 or later:
 
 ```
 go install github.com/kaakaa/gumpet/cmd/gumpet@latest
