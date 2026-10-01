@@ -3,3 +3,6 @@
 
 # Claude Code's per-machine settings.
 /.claude/settings.local.json
+
+# The release signing key. Its home is the repository's secrets, never git.
+/cosign.key

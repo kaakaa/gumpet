@@ -1,5 +1,10 @@
 // Package update replaces a released gumpet with a newer release.
 //
+// A release is installed only if its SHA256SUMS carries a signature from the
+// key in cosign.pub, made by the release workflow. The checksums alone would
+// prove a download arrived whole, not that it came from gumpet: anyone able to
+// publish a release here could publish matching checksums too.
+//
 // It only ever acts when asked. gumpet's promise is that it connects out to
 // nothing but the feeds its config lists, and checking for a new version is
 // not one of those; so there is no timer here, only functions a person's
@@ -18,9 +23,14 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/sha256"
+	"crypto/x509"
+	_ "embed"
 	"encoding/hex"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"io"
@@ -44,6 +54,23 @@ const MaxDownload = 128 << 20
 
 // maxSums caps the checksum file, which is a few lines.
 const maxSums = 64 << 10
+
+// SumsBundle is the Sigstore bundle holding the release key's signature over
+// SHA256SUMS, as `cosign sign-blob --key ... --bundle` writes it. The release
+// also carries SHA256SUMS.sigstore.json, signed without a key by the workflow's
+// own identity, for people to check by hand; this package does not read that
+// one, because verifying it takes a Sigstore client that adds about 12MB to an
+// 18MB binary, along with a few dozen modules.
+const SumsBundle = "SHA256SUMS.key.sigstore.json"
+
+// maxBundle caps the bundle, which is a few kilobytes even with its
+// transparency log entry.
+const maxBundle = 256 << 10
+
+// releaseKeyPEM is the public half of the key the release workflow signs with.
+//
+//go:embed cosign.pub
+var releaseKeyPEM []byte
 
 // Reasons a newer release cannot be installed, as codes rather than sentences
 // so the settings page can say them in its own language.
@@ -124,6 +151,8 @@ type Updater struct {
 	API          string
 	Client       *http.Client
 	GOOS, GOARCH string
+	// Key is what SHA256SUMS must be signed with. Nil refuses every release.
+	Key *ecdsa.PublicKey
 }
 
 // New returns an Updater for the running binary.
@@ -135,7 +164,36 @@ func New(current, exe string) *Updater {
 		Client:  httpsOnly(&http.Client{Timeout: 2 * time.Minute}),
 		GOOS:    runtime.GOOS,
 		GOARCH:  runtime.GOARCH,
+		Key:     ReleaseKey(),
 	}
+}
+
+// ReleaseKey is the key releases are signed with, or nil if the embedded one
+// cannot be read — which a test catches before it could ship.
+func ReleaseKey() *ecdsa.PublicKey {
+	key, err := parseKey(releaseKeyPEM)
+	if err != nil {
+		return nil
+	}
+	return key
+}
+
+// parseKey reads a public key as `cosign generate-key-pair` writes it: PEM,
+// PKIX, ECDSA on P-256.
+func parseKey(data []byte) (*ecdsa.PublicKey, error) {
+	block, _ := pem.Decode(data)
+	if block == nil || block.Type != "PUBLIC KEY" {
+		return nil, errors.New("not a PEM public key")
+	}
+	pub, err := x509.ParsePKIXPublicKey(block.Bytes)
+	if err != nil {
+		return nil, err
+	}
+	key, ok := pub.(*ecdsa.PublicKey)
+	if !ok || key.Curve != elliptic.P256() {
+		return nil, errors.New("not an ECDSA P-256 key")
+	}
+	return key, nil
 }
 
 // httpsOnly refuses to follow a redirect off https. GitHub hands downloads
@@ -291,13 +349,15 @@ func (u *Updater) Apply(ctx context.Context) (Status, error) {
 	if err != nil {
 		return st, err
 	}
-	archiveURL, sumsURL := "", ""
+	archiveURL, sumsURL, bundleURL := "", "", ""
 	for _, a := range rel.Assets {
 		switch a.Name {
 		case name:
 			archiveURL = a.URL
 		case "SHA256SUMS":
 			sumsURL = a.URL
+		case SumsBundle:
+			bundleURL = a.URL
 		}
 	}
 	if archiveURL == "" {
@@ -309,10 +369,23 @@ func (u *Updater) Apply(ctx context.Context) (Status, error) {
 		// install.
 		return st, fmt.Errorf("%s has no SHA256SUMS to check it against", rel.TagName)
 	}
+	if bundleURL == "" {
+		// An unsigned release is refused rather than installed on the
+		// checksum alone: a signature that is only checked when present is
+		// one an attacker simply leaves out.
+		return st, fmt.Errorf("%s has no signature (%s); nothing was replaced", rel.TagName, SumsBundle)
+	}
 
 	sums, err := u.download(ctx, sumsURL, maxSums)
 	if err != nil {
 		return st, err
+	}
+	bundle, err := u.download(ctx, bundleURL, maxBundle)
+	if err != nil {
+		return st, err
+	}
+	if err := verifySums(u.Key, sums, bundle); err != nil {
+		return st, fmt.Errorf("%s: %w; nothing was replaced", rel.TagName, err)
 	}
 	want, err := checksumFor(sums, name)
 	if err != nil {
@@ -334,6 +407,49 @@ func (u *Updater) Apply(ctx context.Context) (Status, error) {
 		return st, err
 	}
 	return st, nil
+}
+
+// sigstoreBundle is the part of a Sigstore bundle that carries a plain
+// signature over a file. The rest — the transparency log entry, the key hint —
+// is for cosign and for people auditing the log, and is not needed to check
+// the signature against a key already known.
+type sigstoreBundle struct {
+	MessageSignature *struct {
+		MessageDigest struct {
+			Algorithm string `json:"algorithm"`
+			Digest    []byte `json:"digest"`
+		} `json:"messageDigest"`
+		Signature []byte `json:"signature"`
+	} `json:"messageSignature"`
+}
+
+// verifySums checks that bundle holds key's signature over sums.
+func verifySums(key *ecdsa.PublicKey, sums, bundle []byte) error {
+	if key == nil {
+		return errors.New("this build has no release key to check signatures with")
+	}
+	var b sigstoreBundle
+	if err := json.Unmarshal(bundle, &b); err != nil {
+		return fmt.Errorf("read the signature: %w", err)
+	}
+	if b.MessageSignature == nil || len(b.MessageSignature.Signature) == 0 {
+		return errors.New("the signature bundle holds no signature")
+	}
+	digest := sha256.Sum256(sums)
+	// The digest is the signer's own note of what it signed. It is checked
+	// so that a bundle for some other file fails saying so, but it is not
+	// trusted: the signature is verified against the digest worked out here.
+	md := b.MessageSignature.MessageDigest
+	if md.Algorithm != "" && md.Algorithm != "SHA2_256" {
+		return fmt.Errorf("the signature is over a %s digest, not SHA2_256", md.Algorithm)
+	}
+	if len(md.Digest) > 0 && !bytes.Equal(md.Digest, digest[:]) {
+		return errors.New("the signature is for a different SHA256SUMS")
+	}
+	if !ecdsa.VerifyASN1(key, digest[:], b.MessageSignature.Signature) {
+		return errors.New("SHA256SUMS is not signed by the gumpet release key")
+	}
+	return nil
 }
 
 func (u *Updater) download(ctx context.Context, url string, limit int64) ([]byte, error) {

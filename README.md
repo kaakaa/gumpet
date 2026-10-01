@@ -68,6 +68,9 @@ Unblock-File .\gumpet.exe, .\gumpetctl.exe
 
 Updates installed from the settings page do not warn again: gumpet downloads
 them itself, so they never carry the browser's "came from the internet" mark.
+It does check that each one is signed by gumpet's release workflow, and refuses
+any that is not — see [Checking a download by hand](docs/guide.md#checking-a-download-by-hand)
+to do the same yourself.
 
 ### Other ways to install
 
