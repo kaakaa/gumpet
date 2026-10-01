@@ -57,7 +57,7 @@ var builtinFrames = []string{"gopher/out01.png", "gopher/out02.png", "gopher/out
 //
 // A name here beats a path of the same spelling. The names have no separator
 // and no extension, so a file that collides with one has to have been asked
-// for by a path that says so — "./pink" rather than "pink".
+// for by a path that says so — "./rose" rather than "rose".
 var Builtins = []Pet{
 	{Name: "gopher", Label: "Gopher", Scale: 1, Smooth: true},
 	{Name: "pixel", Label: "Pixel gopher", file: "pixel/gopher.gif", Scale: 1, Smooth: false},
