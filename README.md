@@ -81,8 +81,6 @@ go install github.com/kaakaa/gumpet/cmd/gumpet@latest
 go install github.com/kaakaa/gumpet/cmd/gumpetctl@latest
 ```
 
-While the repository is private, `go install` needs
-`GOPRIVATE=github.com/kaakaa/*` and a git credential that can reach it.
 Building from a checkout is covered in [DEVELOPMENT.md](DEVELOPMENT.md).
 
 [releases]: https://github.com/kaakaa/gumpet/releases
