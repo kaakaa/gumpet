@@ -1,7 +1,7 @@
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 LDFLAGS := -s -w -X main.version=$(VERSION)
 
-.PHONY: all build run test vet fmt clean windows
+.PHONY: all build run test vet fmt clean windows licenses notices
 
 all: build
 
@@ -25,6 +25,14 @@ vet:
 
 fmt:
 	gofmt -l -w .
+
+# Both need go-licenses: go install github.com/google/go-licenses/v2@v2.0.1
+licenses:
+	.github/licenses/check.sh
+
+notices:
+	@mkdir -p bin
+	.github/licenses/notices.sh $$(go env GOOS) $$(go env GOARCH) > bin/THIRD_PARTY_NOTICES
 
 clean:
 	rm -rf bin

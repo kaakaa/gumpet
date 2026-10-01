@@ -144,7 +144,9 @@ gumpetctl ask -choices "Deploy,Wait" "main is green. Deploy?"
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT — see [LICENSE](LICENSE). The libraries, fonts and artwork gumpet is built
+with have licences of their own, collected in `THIRD_PARTY_NOTICES` in every
+release archive.
 
 ### The artwork
 

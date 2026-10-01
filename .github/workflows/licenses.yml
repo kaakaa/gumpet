@@ -1,0 +1,42 @@
+# Checks the licences of everything linked into gumpet whenever the
+# dependencies could have changed, so a disallowed one is found in its pull
+# request rather than at release time.
+name: licenses
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  GO_VERSION: "1.25"
+  GO_LICENSES_VERSION: v2.0.1
+
+jobs:
+  licenses:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      # Linux is checked with cgo on, as it is built, so the packages loaded
+      # need Ebitengine's headers.
+      - name: Install Ebitengine's Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libasound2-dev libgl1-mesa-dev libx11-dev libxcursor-dev \
+            libxi-dev libxinerama-dev libxrandr-dev libxxf86vm-dev
+      - run: go install github.com/google/go-licenses/v2@${GO_LICENSES_VERSION}
+      - run: .github/licenses/check.sh
+      # The notices are built at release time, so a change that breaks the
+      # script would otherwise only show up then.
+      - name: Build the notices for every platform
+        run: |
+          for target in "darwin arm64" "linux amd64" "windows amd64"; do
+            .github/licenses/notices.sh $target > /dev/null
+          done
