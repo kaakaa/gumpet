@@ -75,8 +75,7 @@ go install github.com/kaakaa/gumpet/cmd/gumpet@latest
 go install github.com/kaakaa/gumpet/cmd/gumpetctl@latest
 ```
 
-リポジトリが非公開のあいだは、`go install` に `GOPRIVATE=github.com/kaakaa/*` と、
-リポジトリにアクセスできる git の認証情報が必要です。チェックアウトからのビルドは
+チェックアウトからのビルドは
 [DEVELOPMENT.md](DEVELOPMENT.md)（英語）にあります。
 
 [releases]: https://github.com/kaakaa/gumpet/releases
