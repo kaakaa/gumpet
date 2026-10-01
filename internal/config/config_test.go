@@ -330,7 +330,8 @@ func TestFadedPetIsStillShown(t *testing.T) {
 // silently turns the pet's feed off.
 func TestChatterAcceptsTheOldSingleFeed(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.yaml")
-	const old = "behavior:\n  chatter:\n    enabled: true\n    feed: \"https://news.ycombinator.com/rss\"\n"
+	// Not the default feed's URL, or the defaults would pass for a migration.
+	const old = "behavior:\n  chatter:\n    enabled: true\n    feed: \"https://old.example.com/rss\"\n"
 	if err := os.WriteFile(path, []byte(old), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -342,7 +343,7 @@ func TestChatterAcceptsTheOldSingleFeed(t *testing.T) {
 	if len(cfg.Behavior.Chatter.Feeds) != 1 {
 		t.Fatalf("feeds = %+v, want the old single feed carried over", cfg.Behavior.Chatter.Feeds)
 	}
-	if got := cfg.Behavior.Chatter.Feeds[0].URL; got != "https://news.ycombinator.com/rss" {
+	if got := cfg.Behavior.Chatter.Feeds[0].URL; got != "https://old.example.com/rss" {
 		t.Errorf("feeds[0].url = %q", got)
 	}
 	if !cfg.Behavior.Chatter.Enabled {
@@ -372,10 +373,73 @@ func TestANewFeedListBeatsTheOldKey(t *testing.T) {
 	}
 }
 
+// What a file says about its feeds decides them, including saying there are
+// none: someone who removed every feed must not find the defaults back, since
+// an empty list is how gumpet is told to make no outgoing requests.
+func TestTheFeedsComeFromTheFileWhenItNamesThem(t *testing.T) {
+	cases := []struct {
+		name string
+		file string
+		want []Feed
+	}{
+		{"an emptied list", "behavior:\n  chatter:\n    feeds: []\n", []Feed{}},
+		{"a list of its own", "behavior:\n  chatter:\n    feeds:\n      - url: \"https://mine.example.com/rss\"\n",
+			[]Feed{{URL: "https://mine.example.com/rss"}}},
+		{"no feeds key", "behavior:\n  chatter:\n    enabled: false\n", DefaultFeeds()},
+		{"no chatter block", "behavior:\n  speed: 30\n", DefaultFeeds()},
+	}
+	for _, c := range cases {
+		path := filepath.Join(t.TempDir(), "config.yaml")
+		if err := os.WriteFile(path, []byte(c.file), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		cfg, err := Load(path)
+		if err != nil {
+			t.Fatalf("%s: Load: %v", c.name, err)
+		}
+		if got := cfg.Behavior.Chatter.Feeds; !reflect.DeepEqual(got, c.want) {
+			t.Errorf("%s: feeds = %#v, want %#v", c.name, got, c.want)
+		}
+	}
+}
+
+// An emptied list has to survive the settings page saving it and gumpet
+// reading it back, which is the round trip it actually takes.
+func TestAnEmptiedFeedListStaysEmptyAcrossASave(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	cfg := Default()
+	cfg.Behavior.Chatter.Feeds = []Feed{}
+	if err := Save(path, cfg); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	again, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if n := len(again.Behavior.Chatter.Feeds); n != 0 {
+		t.Errorf("after saving no feeds, %d came back: %+v", n, again.Behavior.Chatter.Feeds)
+	}
+}
+
+// A new pet talks from the start, from Hacker News.
+func TestANewPetReadsHackerNews(t *testing.T) {
+	c := Default().Behavior.Chatter
+	if !c.Enabled {
+		t.Error("chatter is off by default")
+	}
+	want := []Feed{{Name: "Hacker News", URL: "https://news.ycombinator.com/rss"}}
+	if !reflect.DeepEqual(c.Feeds, want) {
+		t.Errorf("default feeds = %+v, want %+v", c.Feeds, want)
+	}
+	if err := Default().Validate(); err != nil {
+		t.Errorf("the defaults do not validate: %v", err)
+	}
+}
+
 // An old config, once saved, should come back as a list rather than reverting.
 func TestTheOldFeedIsWrittenBackAsAList(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.yaml")
-	const old = "behavior:\n  chatter:\n    feed: \"https://news.ycombinator.com/rss\"\n"
+	const old = "behavior:\n  chatter:\n    feed: \"https://old.example.com/rss\"\n"
 	if err := os.WriteFile(path, []byte(old), 0o644); err != nil {
 		t.Fatal(err)
 	}

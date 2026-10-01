@@ -237,8 +237,9 @@ type Quiet struct {
 
 // Chatter is what the pet says of its own accord between messages.
 type Chatter struct {
-	// Enabled is off by default. A pet that starts talking unprompted is a
-	// surprise, so it is asked for rather than assumed.
+	// Enabled is on by default, reading DefaultFeeds: a new pet with nothing
+	// sent to it yet would otherwise just walk, and headlines show what the
+	// balloons are for before anything has been wired up to send one.
 	Enabled bool `yaml:"enabled" json:"enabled"`
 	// IntervalSec is roughly how long between remarks. Roughly, because the
 	// wait is varied either side of it: exactly the same gap every time sounds
@@ -247,8 +248,10 @@ type Chatter struct {
 	// Source is a file of sayings, one per line. Empty uses the bundled list.
 	Source string `yaml:"source" json:"source"`
 	// Feeds are RSS or Atom sources whose headlines the pet reads out instead
-	// of the sayings above. Empty, which is the default, means gumpet makes no
-	// outgoing connections at all.
+	// of the sayings above. They are the only thing gumpet connects out to on
+	// its own, so emptying the list means it makes no outgoing connections at
+	// all — and an emptied list has to stay empty, rather than the defaults
+	// coming back on the next load. See UnmarshalYAML.
 	Feeds []Feed `yaml:"feeds" json:"feeds"`
 	// MaxAgeDays drops headlines older than this, so that a podcast archive of
 	// five hundred episodes does not bury this morning's news. Zero keeps
@@ -268,6 +271,13 @@ const MaxFeeds = 10
 // MaxFeedName caps a feed's label. It is drawn as the balloon's heading, and a
 // name pasted in from somewhere else should not be able to fill the screen.
 const MaxFeedName = 40
+
+// DefaultFeeds are read by a pet that has not been told otherwise. One feed,
+// and a widely read one: enough to show what reading feeds looks like without
+// choosing someone's news for them.
+func DefaultFeeds() []Feed {
+	return []Feed{{Name: "Hacker News", URL: "https://news.ycombinator.com/rss"}}
+}
 
 // Feed is one source of headlines.
 type Feed struct {
@@ -289,13 +299,24 @@ func (c *Chatter) UnmarshalYAML(value *yaml.Node) error {
 	}
 	// Defaults survive keys the file leaves out, which is what Load relies on.
 	raw.chatter = chatter(*c)
+	// Except the feeds, which start out nil so that afterwards nil can only
+	// mean the file did not mention them. Left at the defaults, a file that
+	// says `feeds: []` and one that says nothing would look alike, and
+	// someone who removed every feed would find the defaults back.
+	defaults := c.Feeds
+	raw.chatter.Feeds = nil
 
 	if err := value.Decode(&raw); err != nil {
 		return err
 	}
 	*c = Chatter(raw.chatter)
-	if raw.Feed != "" && len(c.Feeds) == 0 {
+	switch {
+	case c.Feeds != nil:
+		// The file's own list, even an empty one, wins over the old key.
+	case raw.Feed != "":
 		c.Feeds = []Feed{{URL: raw.Feed}}
+	default:
+		c.Feeds = defaults
 	}
 	if c.Feeds == nil {
 		c.Feeds = []Feed{}
@@ -392,13 +413,10 @@ func Default() Config {
 			// would look broken.
 			Quiet: Quiet{From: "", To: ""},
 			Chatter: Chatter{
-				Enabled:     false,
-				IntervalSec: 600,
-				Source:      "",
-				// Empty rather than nil: this is marshalled to the settings
-				// page as JSON, where nil would arrive as null and the page
-				// would have a list it cannot iterate.
-				Feeds:            []Feed{},
+				Enabled:          true,
+				IntervalSec:      600,
+				Source:           "",
+				Feeds:            DefaultFeeds(),
 				MaxAgeDays:       30,
 				FetchIntervalSec: 1800,
 			},
