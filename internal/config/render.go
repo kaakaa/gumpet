@@ -63,12 +63,12 @@ pet:
   # an animated GIF, or a directory of frames. Empty means the gopher.
   #
   #   gopher    the original walking gopher
-  #   pixel     a pixel-art gopher, and the only one that runs
-  #   blue      an illustrated gopher, standing
-  #   strawhat  the same, in a hat, mid-stride
-  #   pink      the same again, pink and pleased about it
+  #   pixel     a pixel-art gopher, running
+  #   astro     something small and green in a space helmet
+  #   rose      the same idea, in pink
+  #   flier     a winged thing, flapping
   #
-  # A name wins over a file of the same spelling; write ./pink to mean the file.
+  # A name wins over a file of the same spelling; write ./rose to mean the file.
   source: {{ q .Pet.Source }}
   # Size relative to how the artwork is meant to be drawn, so 1 looks right
   # whichever pet is chosen.
