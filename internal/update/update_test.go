@@ -6,9 +6,14 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
 	"crypto/sha256"
+	"crypto/x509"
 	"encoding/hex"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"net/http"
@@ -120,11 +125,48 @@ func TestAssetNameMatchesTheReleaseWorkflow(t *testing.T) {
 		t.Fatalf("read the release workflow: %v", err)
 	}
 	for _, part := range []string{"darwin_universal.tar.gz", "gumpet_${GITHUB_REF_NAME}_${{ matrix.name }}", "SHA256SUMS",
-		"windows_amd64", "windows_arm64", "linux_amd64"} {
+		"windows_amd64", "windows_arm64", "linux_amd64", SumsBundle} {
 		if !strings.Contains(string(workflow), part) {
 			t.Errorf("the release workflow no longer mentions %q, which this package relies on", part)
 		}
 	}
+}
+
+// releaseKey stands in for the real release key, whose private half lives only
+// in the release workflow's secrets.
+var releaseKey = mustKey()
+
+func mustKey() *ecdsa.PrivateKey {
+	k, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		panic(err)
+	}
+	return k
+}
+
+// bundleFor is what `cosign sign-blob --key --bundle` writes for sums, cut
+// down to the fields a bundle with a messageSignature always has.
+func bundleFor(t *testing.T, key *ecdsa.PrivateKey, sums []byte) []byte {
+	t.Helper()
+	digest := sha256.Sum256(sums)
+	sig, err := ecdsa.SignASN1(rand.Reader, key, digest[:])
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := json.Marshal(map[string]any{
+		"mediaType": "application/vnd.dev.sigstore.bundle.v0.3+json",
+		"verificationMaterial": map[string]any{
+			"publicKey": map[string]any{"hint": "ignored"},
+		},
+		"messageSignature": map[string]any{
+			"messageDigest": map[string]any{"algorithm": "SHA2_256", "digest": digest[:]},
+			"signature":     sig,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return b
 }
 
 // fakeGitHub is a GitHub that serves one release.
@@ -136,8 +178,16 @@ type fakeGitHub struct {
 	files    map[string][]byte // name → bytes, SHA256SUMS included
 }
 
+// newFakeGitHub serves files as the release's assets. A SHA256SUMS among them
+// is signed with releaseKey, as the workflow would, unless files already says
+// what SumsBundle is — nil meaning the release has none.
 func newFakeGitHub(t *testing.T, tag string, files map[string][]byte) *fakeGitHub {
 	t.Helper()
+	if b, ok := files[SumsBundle]; ok && b == nil {
+		delete(files, SumsBundle)
+	} else if s, ok := files["SHA256SUMS"]; ok && !hasBundle(files) {
+		files[SumsBundle] = bundleFor(t, releaseKey, s)
+	}
 	f := &fakeGitHub{tag: tag, files: files}
 	f.Server = httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		f.mu.Lock()
@@ -162,6 +212,11 @@ func newFakeGitHub(t *testing.T, tag string, files map[string][]byte) *fakeGitHu
 	return f
 }
 
+func hasBundle(files map[string][]byte) bool {
+	_, ok := files[SumsBundle]
+	return ok
+}
+
 func (f *fakeGitHub) downloaded(name string) bool {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -178,6 +233,7 @@ func (f *fakeGitHub) updater(current, exe, goos string) *Updater {
 	u.API = f.URL + "/repos/kaakaa/gumpet"
 	u.Client = httpsOnly(f.Client())
 	u.GOOS, u.GOARCH = goos, "amd64"
+	u.Key = &releaseKey.PublicKey
 	return u
 }
 
@@ -530,5 +586,84 @@ func TestCheckSaysWhenThereAreNoReleases(t *testing.T) {
 	u.API, u.Client = gh.URL, gh.Client()
 	if _, err := u.Check(context.Background()); err == nil || !strings.Contains(err.Error(), "no releases") {
 		t.Errorf("err = %v, want one saying there are no releases", err)
+	}
+}
+
+// A release is installed only on the release key's signature. Each of these
+// is what an attacker able to publish a release, but not holding the key,
+// could put up — and each must replace nothing.
+func TestApplyRefusesAReleaseNotSignedByTheReleaseKey(t *testing.T) {
+	archive := tarGz(t, map[string]string{"./gumpet": "new gumpet"})
+	name := "gumpet_v0.3.1_darwin_universal.tar.gz"
+	good := sums(map[string][]byte{name: archive})
+	other := sums(map[string][]byte{name: archive, "extra": []byte("x")})
+
+	cases := []struct {
+		name   string
+		bundle []byte
+		key    *ecdsa.PublicKey
+		want   string
+	}{
+		{"with no signature", nil, &releaseKey.PublicKey, "no signature"},
+		{"signed by some other key", bundleFor(t, mustKey(), good), &releaseKey.PublicKey, "not signed by"},
+		{"whose signature is for other checksums", bundleFor(t, releaseKey, other), &releaseKey.PublicKey, "different SHA256SUMS"},
+		{"whose signature is not a bundle", []byte("not json"), &releaseKey.PublicKey, "read the signature"},
+		{"whose bundle holds no signature", []byte(`{"mediaType":"x"}`), &releaseKey.PublicKey, "no signature"},
+		{"to a build with no key", bundleFor(t, releaseKey, good), nil, "no release key"},
+	}
+	for _, c := range cases {
+		gh := newFakeGitHub(t, "v0.3.1", map[string][]byte{name: archive, "SHA256SUMS": good, SumsBundle: c.bundle})
+		dir := installed(t, "gumpet")
+		u := gh.updater("v0.3.0", filepath.Join(dir, "gumpet"), "darwin")
+		u.Key = c.key
+		_, err := u.Apply(context.Background())
+		if err == nil || !strings.Contains(err.Error(), c.want) {
+			t.Errorf("%s: err = %v, want one mentioning %q", c.name, err, c.want)
+		}
+		if got := read(t, filepath.Join(dir, "gumpet")); got != "old gumpet" {
+			t.Errorf("%s: gumpet was replaced", c.name)
+		}
+		if gh.downloaded(name) {
+			t.Errorf("%s: the archive was downloaded before the signature was checked", c.name)
+		}
+	}
+}
+
+// A signature over the digest alone, with no digest noted beside it, is still
+// a signature: cosign has written bundles both ways.
+func TestVerifySumsNeedsOnlyTheSignature(t *testing.T) {
+	s := []byte("abc  gumpet.tar.gz\n")
+	digest := sha256.Sum256(s)
+	sig, _ := ecdsa.SignASN1(rand.Reader, releaseKey, digest[:])
+	b, _ := json.Marshal(map[string]any{"messageSignature": map[string]any{"signature": sig}})
+	if err := verifySums(&releaseKey.PublicKey, s, b); err != nil {
+		t.Errorf("a bare signature was refused: %v", err)
+	}
+}
+
+// The key compiled in is the one releases are checked against. If it does not
+// parse, every update fails — so it must not ship that way.
+func TestTheEmbeddedReleaseKeyIsUsable(t *testing.T) {
+	if ReleaseKey() == nil {
+		t.Fatalf("cosign.pub is not an ECDSA P-256 public key:\n%s", releaseKeyPEM)
+	}
+	if New("v0.1.0", "gumpet").Key == nil {
+		t.Error("New does not use the release key")
+	}
+}
+
+func TestParseKeyRefusesWhatIsNotACosignKey(t *testing.T) {
+	p384, _ := ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
+	der, _ := x509.MarshalPKIXPublicKey(&p384.PublicKey)
+	cases := map[string][]byte{
+		"not PEM":        []byte("hello"),
+		"a private key":  pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: []byte{1}}),
+		"a key on P-384": pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: der}),
+		"a PEM of junk":  pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: []byte{1, 2, 3}}),
+	}
+	for name, data := range cases {
+		if _, err := parseKey(data); err == nil {
+			t.Errorf("%s was accepted as a release key", name)
+		}
 	}
 }

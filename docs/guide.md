@@ -354,8 +354,40 @@ gumpet only asks GitHub when you press it; it never checks on its own. A build f
 newer release exists but leaves updating it to git, and a copy in a folder you
 cannot write to says so before downloading anything.
 
-The checksum proves the download arrived whole, not who made it: it comes from
-the same release as the archive.
+Before replacing anything, gumpet checks that the release's `SHA256SUMS` is
+signed with the gumpet release key, whose public half is built into it
+([`internal/update/cosign.pub`](../internal/update/cosign.pub)). A release
+without that signature, or with someone else's, is refused and nothing is
+replaced. The checksum then proves the archive arrived whole; the signature
+proves the checksums came from gumpet's own release workflow.
+
+### Checking a download by hand
+
+Every release carries two signatures over `SHA256SUMS`, both checkable with
+[cosign](https://docs.sigstore.dev/cosign/system_config/installation/). The
+keyless one says the file was made by this repository's release workflow for
+that tag, without trusting any key:
+
+```
+cosign verify-blob \
+  --certificate-identity-regexp '^https://github.com/kaakaa/gumpet/\.github/workflows/release\.yml@refs/tags/v' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  --bundle SHA256SUMS.sigstore.json SHA256SUMS
+```
+
+The key one is the signature gumpet itself checks:
+
+```
+cosign verify-blob --key cosign.pub --bundle SHA256SUMS.key.sigstore.json SHA256SUMS
+```
+
+Then check the archive against the checksums:
+
+```
+sha256sum --check --ignore-missing SHA256SUMS
+```
+
+On macOS, `shasum -a 256 --check --ignore-missing SHA256SUMS`.
 
 ## Notes
 

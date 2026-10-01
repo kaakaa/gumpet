@@ -62,7 +62,9 @@ Unblock-File .\gumpet.exe, .\gumpetctl.exe
 **Linux** では何も出ません。
 
 設定ページから入れたアップデートでは、警告は再び出ません。gumpet が自分でダウンロードするので、
-ブラウザが付ける「インターネットから来た」という印が付かないためです。
+ブラウザが付ける「インターネットから来た」という印が付かないためです。その代わり、gumpet の
+リリース用ワークフローが署名したものかを確かめ、署名のないものは入れません。自分で確かめる
+方法は [Checking a download by hand](docs/guide.md#checking-a-download-by-hand)（英語）にあります。
 
 ### ほかの入れ方
 

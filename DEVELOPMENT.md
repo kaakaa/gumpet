@@ -84,4 +84,40 @@ git push origin v0.1.0
 The workflow runs `go vet` and the tests first, then builds Windows (amd64 and
 arm64) and Linux by cross-compiling from a Linux runner, and macOS on a macOS
 runner because Metal needs cgo. It attaches the archives and a `SHA256SUMS` file
-to the release.
+to the release, with two signatures over `SHA256SUMS`:
+
+| File | Signed with | Read by |
+| --- | --- | --- |
+| `SHA256SUMS.key.sigstore.json` | the release key, from the repository's secrets | gumpet's updater, which refuses a release without it |
+| `SHA256SUMS.sigstore.json` | no key: a short-lived Sigstore certificate naming the workflow and tag | people, with `cosign verify-blob` |
+
+Both are recorded in Sigstore's public transparency log, and both are verified
+by the workflow before the release is published. The updater checks only the
+key signature, with nothing but the standard library: verifying the keyless one
+in Go needs a Sigstore client that adds about 12MB to an 18MB binary.
+
+### Setting up the release key
+
+Once, before the first signed release. With
+[cosign](https://docs.sigstore.dev/cosign/system_config/installation/)
+installed:
+
+```
+cosign generate-key-pair
+gh secret set COSIGN_PRIVATE_KEY < cosign.key
+gh secret set COSIGN_PASSWORD
+mv cosign.pub internal/update/cosign.pub
+```
+
+`generate-key-pair` asks for a password and encrypts `cosign.key` with it; the
+second `gh secret set` asks for the same password. Commit
+`internal/update/cosign.pub` — it is compiled into gumpet, and
+`TestTheEmbeddedReleaseKeyIsUsable` fails if it is not a key the updater can
+use. Keep `cosign.key` and its password somewhere safe outside the repository
+(`.gitignore` names it, so it cannot be committed by accident), or delete it:
+the secret is the copy the workflow uses.
+
+Changing the key later works for new installs only. Every gumpet already out
+there checks for the old one and will refuse releases signed with the new one,
+so their owners have to download the next release by hand. That is the point
+of the key, and the reason not to change it lightly.
