@@ -25,6 +25,8 @@ which does the same thing on Windows only.
   you can step away from the terminal.
 - **It says how serious it is.** Messages come in info, success, warn and error,
   coloured to match — and the pet jumps for good news and shivers at bad.
+- **It has something to say anyway.** Between messages it reads out Hacker
+  News headlines — or any feeds you like, or nothing at all.
 - **It stays out of the way.** The window is only as big as the pet and its
   balloon. It can fade out or vanish between messages, and click a balloon to
   dismiss it.

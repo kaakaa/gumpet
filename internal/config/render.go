@@ -116,7 +116,7 @@ behavior:
     from: {{ q .Behavior.Quiet.From }}
     to: {{ q .Behavior.Quiet.To }}
   # Between messages the pet can talk to itself, so that it is doing something
-  # even when nothing has arrived. Off unless you ask for it.
+  # even when nothing has arrived. On from the start, reading Hacker News.
   chatter:
     enabled: {{ .Behavior.Chatter.Enabled }}
     # Roughly how many seconds between remarks. The wait is varied by up to
@@ -138,7 +138,7 @@ behavior:
     #       url: https://go.dev/blog/feed.atom
     #
     # This is the only thing in gumpet that connects out to anywhere. An empty
-    # list, which is the default, means it makes no outgoing requests at all.
+    # list means it makes no outgoing requests at all, and stays empty.
     # Only http and https; only the headlines, never the articles.
     {{- if .Behavior.Chatter.Feeds }}
     feeds:

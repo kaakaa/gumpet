@@ -900,9 +900,19 @@ func TestAFeedURLThatIsNotHTTPIsRejected(t *testing.T) {
 	}
 }
 
-// The page iterates this list, so it must never arrive as null.
+// The page iterates this list, so it must never arrive as null. An empty one
+// comes from a config file whose feeds were all removed, so that is where this
+// one comes from too.
 func TestConfigCarriesAnEmptyFeedListRatherThanNull(t *testing.T) {
-	s, _, _ := newTestServerWithConfig(t, config.Default(), 1)
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	if err := os.WriteFile(path, []byte("behavior:\n  chatter:\n    feeds: []\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := config.Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	s, _, _ := newTestServerWithConfig(t, cfg, 1)
 
 	rec := do(t, s, http.MethodGet, "/api/v1/config", "", "", nil)
 	if rec.Code != http.StatusOK {

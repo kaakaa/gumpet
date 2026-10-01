@@ -1,8 +1,9 @@
 // Package update replaces a released gumpet with a newer release.
 //
-// It only ever acts when asked. gumpet's promise is that it makes no outgoing
-// connections unless told to, and checking for a new version is one; so there
-// is no timer here, only functions a person's click ends up calling.
+// It only ever acts when asked. gumpet's promise is that it connects out to
+// nothing but the feeds its config lists, and checking for a new version is
+// not one of those; so there is no timer here, only functions a person's
+// click ends up calling.
 //
 // Everything but the final restart is ordinary code over bytes and files —
 // which release is newer, which archive is this machine's, whether its
