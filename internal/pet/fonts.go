@@ -164,10 +164,6 @@ func loadFontSource(path string) (*text.GoTextFaceSource, error) {
 	return source, nil
 }
 
-func (g *Game) wrap(f fontFace, s string, maxWidth float64) []string {
-	return textwrap.Wrap(s, f, maxWidth)
-}
-
 func (g *Game) blockWidth(f fontFace, lines []string) float64 {
 	return textwrap.BlockWidth(lines, f)
 }

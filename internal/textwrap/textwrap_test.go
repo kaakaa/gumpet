@@ -23,35 +23,55 @@ func (monoMeasurer) Advance(s string) float64 {
 
 var m monoMeasurer
 
+// wrap is WrapSpans for unstyled text, as plain lines. The rules for where a
+// line may break are easiest to read and check this way.
+func wrap(s string, m Measurer, maxWidth float64) []string {
+	lines := WrapSpans([]Span{{Text: s}}, m, maxWidth)
+	out := make([]string, len(lines))
+	for i, l := range lines {
+		out[i] = text(l)
+	}
+	return out
+}
+
+// text is a line as a plain string, with the styling dropped.
+func text(l Line) string {
+	var b strings.Builder
+	for _, r := range l.Runs {
+		b.WriteString(r.Text)
+	}
+	return b.String()
+}
+
 func TestWrapKeepsExplicitLineBreaks(t *testing.T) {
-	got := Wrap("one\ntwo", m, 100)
+	got := wrap("one\ntwo", m, 100)
 	if len(got) != 2 || got[0] != "one" || got[1] != "two" {
-		t.Errorf("Wrap = %q, want [one two]", got)
+		t.Errorf("wrap = %q, want [one two]", got)
 	}
 }
 
 func TestWrapBreaksLatinAtSpaces(t *testing.T) {
-	got := Wrap("hello world", m, 7)
+	got := wrap("hello world", m, 7)
 	if len(got) != 2 || got[0] != "hello" || got[1] != "world" {
-		t.Errorf("Wrap = %q, want [hello world]", got)
+		t.Errorf("wrap = %q, want [hello world]", got)
 	}
 }
 
 func TestWrapDoesNotSplitAWordItCanAvoidSplitting(t *testing.T) {
-	got := Wrap("a bcdef", m, 6)
+	got := wrap("a bcdef", m, 6)
 	if len(got) != 2 || got[0] != "a" || got[1] != "bcdef" {
-		t.Errorf("Wrap = %q, want [a bcdef]", got)
+		t.Errorf("wrap = %q, want [a bcdef]", got)
 	}
 }
 
 func TestWrapBreaksJapaneseAnywhere(t *testing.T) {
 	const s = "こんにちは世界"
-	got := Wrap(s, m, 6) // three full-width runes per line
+	got := wrap(s, m, 6) // three full-width runes per line
 	if len(got) != 3 {
-		t.Fatalf("Wrap = %q, want 3 lines", got)
+		t.Fatalf("wrap = %q, want 3 lines", got)
 	}
 	if joined := strings.Join(got, ""); joined != s {
-		t.Errorf("Wrap lost or added text: %q, want %q", joined, s)
+		t.Errorf("wrap lost or added text: %q, want %q", joined, s)
 	}
 	for _, line := range got {
 		if w := m.Advance(line); w > 6 {
@@ -62,7 +82,7 @@ func TestWrapBreaksJapaneseAnywhere(t *testing.T) {
 
 func TestWrapKeepsProhibitedRunesOffLineStart(t *testing.T) {
 	// Without kinsoku handling the break would land before "、".
-	got := Wrap("ねこ、いぬ", m, 6)
+	got := wrap("ねこ、いぬ", m, 6)
 	for _, line := range got {
 		if line == "" {
 			continue
@@ -74,15 +94,15 @@ func TestWrapKeepsProhibitedRunesOffLineStart(t *testing.T) {
 }
 
 func TestWrapTerminatesWhenEveryRuneIsTooWide(t *testing.T) {
-	got := Wrap("abc", m, 0.5)
+	got := wrap("abc", m, 0.5)
 	if len(got) != 3 {
-		t.Errorf("Wrap = %q, want one rune per line", got)
+		t.Errorf("wrap = %q, want one rune per line", got)
 	}
 }
 
 func TestWrapEmptyString(t *testing.T) {
-	if got := Wrap("", m, 10); len(got) != 1 || got[0] != "" {
-		t.Errorf("Wrap = %q, want one empty line", got)
+	if got := wrap("", m, 10); len(got) != 1 || got[0] != "" {
+		t.Errorf("wrap = %q, want one empty line", got)
 	}
 }
 
@@ -143,18 +163,18 @@ func TestWrapSpansSplitsOneSpanAcrossLines(t *testing.T) {
 	}
 }
 
-// The styled and the plain paths must break in the same places, since Wrap is
-// WrapSpans with the styling left out.
-func TestWrapSpansBreaksWhereWrapDoes(t *testing.T) {
+// Styled text must break in the same places as the same text unstyled: a link
+// in a message must not move where its lines end.
+func TestStylingDoesNotMoveALineBreak(t *testing.T) {
 	const s = "aaa bbb ccc 日本語のテキストが続く and then some latin"
 	for _, width := range []float64{7, 12, 20, 33} {
-		plain := Wrap(s, m, width)
+		plain := wrap(s, m, width)
 		var styled []string
 		for _, l := range WrapSpans([]Span{{Text: s, Style: "link"}}, m, width) {
-			styled = append(styled, l.Text())
+			styled = append(styled, text(l))
 		}
 		if !equal(plain, styled) {
-			t.Errorf("width %v: Wrap = %q, WrapSpans = %q", width, plain, styled)
+			t.Errorf("width %v: unstyled breaks as %q, styled as %q", width, plain, styled)
 		}
 	}
 }

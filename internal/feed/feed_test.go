@@ -188,7 +188,7 @@ func TestFetchReadsAFeedOverHTTP(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	items, err := NewFetcher().Fetch(context.Background(), srv.URL)
+	items, _, _, err := NewFetcher().fetch(context.Background(), srv.URL)
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
@@ -206,8 +206,8 @@ func TestFetchRefusesSchemesItShouldNotTouch(t *testing.T) {
 		"news.ycombinator.com/rss",
 		"",
 	} {
-		if _, err := NewFetcher().Fetch(context.Background(), url); err == nil {
-			t.Errorf("Fetch(%q) succeeded, want a refusal", url)
+		if _, _, _, err := NewFetcher().fetch(context.Background(), url); err == nil {
+			t.Errorf("fetch(%q) succeeded, want a refusal", url)
 		}
 	}
 }
@@ -218,7 +218,7 @@ func TestFetchReportsABadStatus(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	if _, err := NewFetcher().Fetch(context.Background(), srv.URL); err == nil {
+	if _, _, _, err := NewFetcher().fetch(context.Background(), srv.URL); err == nil {
 		t.Error("Fetch succeeded on a 404, want an error")
 	}
 }
@@ -238,7 +238,7 @@ func TestFetchStopsReadingAnEndlessBody(t *testing.T) {
 
 	// It fails to parse, which is the point: it returns rather than reading
 	// 13MB of x.
-	if _, err := NewFetcher().Fetch(context.Background(), srv.URL); err == nil {
+	if _, _, _, err := NewFetcher().fetch(context.Background(), srv.URL); err == nil {
 		t.Error("Fetch succeeded on a body of rubbish, want an error")
 	}
 }
