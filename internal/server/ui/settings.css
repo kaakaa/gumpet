@@ -1,0 +1,176 @@
+:root {
+  --ok-bg: #e6f6ec;
+  --ok-ink: #16653a;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ok-bg: #16331f;
+    --ok-ink: #8ddba8;
+  }
+}
+
+main { max-width: 660px; margin: 0 auto; padding: 32px 20px 96px; }
+
+header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 24px;
+}
+nav { display: flex; align-items: center; gap: 14px; }
+/* The picker is chrome, not a setting, so it stays out of the way: narrow,
+   and no wider than the two language names it holds. */
+nav select { width: auto; max-width: none; padding: 4px 8px; font-size: 13px; }
+.title { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.path .running:not(:empty) { margin-right: 12px; color: var(--ink); }
+.path {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+section {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 4px 18px 18px;
+  margin-bottom: 16px;
+}
+h2 {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  margin: 18px 0 14px;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 190px 1fr;
+  gap: 10px 16px;
+  align-items: center;
+  padding: 7px 0;
+}
+.row + .row { border-top: 1px solid var(--line); }
+@media (max-width: 540px) {
+  .row { grid-template-columns: 1fr; gap: 4px; }
+}
+.row > label { font-weight: 500; }
+.hint {
+  grid-column: 2;
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+@media (max-width: 540px) { .hint { grid-column: 1; } }
+
+textarea {
+  resize: vertical;
+  min-height: 60px;
+  line-height: 1.5;
+}
+
+input[type=text], input[type=number], input[type=time], select, textarea {
+  width: 100%;
+  max-width: 340px;
+  padding: 7px 9px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--ink);
+  font: inherit;
+}
+input[type=number], input[type=time] { max-width: 140px; }
+input:focus-visible, select:focus-visible, button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+input[type=checkbox] { width: 17px; height: 17px; accent-color: var(--accent); }
+input:disabled, select:disabled { opacity: 0.45; }
+
+.tag {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  vertical-align: 1px;
+}
+
+button {
+  padding: 9px 18px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+button.small { padding: 4px 11px; font-size: 12.5px; }
+button.secondary {
+  background: var(--card);
+  color: var(--ink);
+  border-color: var(--line);
+  font-weight: 500;
+}
+/* A disabled Save has to read as clearly inert, not merely dimmed: it is the
+   signal that there is nothing to save. */
+button:disabled {
+  background: var(--card);
+  color: var(--muted);
+  border-color: var(--line);
+  cursor: default;
+}
+
+.bar {
+  position: fixed;
+  left: 0; right: 0; bottom: 0;
+  background: var(--card);
+  border-top: 1px solid var(--line);
+  padding: 12px 20px;
+}
+.bar-inner {
+  max-width: 660px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.bar .status { color: var(--muted); font-size: 13px; }
+
+details.advanced > summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-weight: 600;
+  padding: 6px 2px 14px;
+}
+details.advanced > summary:hover { color: var(--ink); }
+.note.update {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  background: var(--card);
+  border: 1px solid var(--line);
+}
+.note {
+  padding: 10px 13px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.note.ok { background: var(--ok-bg); color: var(--ok-ink); }
+.note.err { background: var(--err-bg); color: var(--err-ink); }
+.inline input { flex: 1; }
+.inline button { padding: 7px 14px; }
