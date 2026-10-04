@@ -21,7 +21,7 @@ built on a Mac.
 code. They are not gumpet's; ignore them.
 
 A Windows build links in `cmd/gumpet/rsrc_windows_*.syso`, which gives
-`gumpet.exe` its icon in Explorer and on a taskbar pin: a pixel-art post box,
+`gumpet.exe` its icon in Explorer and on a taskbar pin: a pixel-art mailbox,
 drawn by hand in [`cmd/gumpet/winres/mailbox.go`](cmd/gumpet/winres/mailbox.go).
 The objects are committed. Regenerate them after changing the drawing:
 
