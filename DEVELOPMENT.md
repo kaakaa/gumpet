@@ -21,9 +21,9 @@ built on a Mac.
 code. They are not gumpet's; ignore them.
 
 A Windows build links in `cmd/gumpet/rsrc_windows_*.syso`, which gives
-`gumpet.exe` its icon in Explorer and on a taskbar pin. The objects are
-committed, made from the default gopher by the same code as the window's
-icon. Regenerate them after changing either:
+`gumpet.exe` its icon in Explorer and on a taskbar pin: a pixel-art post box,
+drawn by hand in [`cmd/gumpet/winres/mailbox.go`](cmd/gumpet/winres/mailbox.go).
+The objects are committed. Regenerate them after changing the drawing:
 
 ```
 go generate ./cmd/gumpet

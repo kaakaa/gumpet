@@ -8,37 +8,26 @@ import (
 	"image/png"
 	"os"
 	"testing"
-
-	"github.com/kaakaa/gumpet/internal/icon"
-	"github.com/kaakaa/gumpet/internal/petsrc"
 )
 
-var update = flag.Bool("update", false, "rewrite the icon PNGs from the default gopher")
-
-// gopherIcons are the icons the window would get for the default pet, one per
-// size in icon.Sizes.
-func gopherIcons(t *testing.T) []image.Image {
-	t.Helper()
-	src, err := petsrc.Builtin()
-	if err != nil {
-		t.Fatal(err)
-	}
-	return icon.From(src.Walk[0].Image, src.Smooth)
-}
+var update = flag.Bool("update", false, "rewrite the icon PNGs from the drawing")
 
 func name(size int) string { return fmt.Sprintf("icon_%d.png", size) }
 
-// The executable's icon is the gopher's window icon, size for size. It is
-// committed rather than built on every compile, so this is what notices when
-// the gopher or the icon code changes and the PNGs were not regenerated.
-func TestTheExecutableIconIsTheGophersWindowIcon(t *testing.T) {
-	icons := gopherIcons(t)
-	for i, size := range icon.Sizes {
-		var buf bytes.Buffer
-		if err := png.Encode(&buf, icons[i]); err != nil {
-			t.Fatal(err)
+// The PNGs are committed rather than drawn on every build, so this is what
+// notices when the drawing changes and they were not regenerated.
+func TestTheIconPNGsAreTheDrawing(t *testing.T) {
+	for _, size := range Sizes {
+		img := Icon(size)
+		if img == nil {
+			t.Errorf("Icon(%d) drew nothing; every size in Sizes must divide by 16 or 32", size)
+			continue
 		}
 		if *update {
+			var buf bytes.Buffer
+			if err := png.Encode(&buf, img); err != nil {
+				t.Fatal(err)
+			}
 			if err := os.WriteFile(name(size), buf.Bytes(), 0o644); err != nil {
 				t.Fatal(err)
 			}
@@ -55,20 +44,44 @@ func TestTheExecutableIconIsTheGophersWindowIcon(t *testing.T) {
 			t.Errorf("%s: %v", name(size), err)
 			continue
 		}
-		if !samePixels(got, icons[i]) {
-			t.Errorf("%s no longer matches the gopher's icon; run go generate ./cmd/gumpet", name(size))
+		if !samePixels(got, img) {
+			t.Errorf("%s no longer matches the drawing; run go generate ./cmd/gumpet", name(size))
 		}
 	}
 }
 
-// Every size the window offers is in the resource, so Windows can pick the
-// one that suits Explorer's view and the screen's density.
+// A drawing with a short row, or a letter missing from the palette, would
+// come out with a hole in it rather than fail.
+func TestTheDrawingsAreWellFormed(t *testing.T) {
+	for _, d := range []struct {
+		name    string
+		drawing []string
+		size    int
+	}{{"drawing16", drawing16, 16}, {"drawing32", drawing32, 32}} {
+		if len(d.drawing) != d.size {
+			t.Errorf("%s has %d rows, want %d", d.name, len(d.drawing), d.size)
+		}
+		for y, row := range d.drawing {
+			if len(row) != d.size {
+				t.Errorf("%s row %d is %d wide, want %d", d.name, y, len(row), d.size)
+			}
+			for x := 0; x < len(row); x++ {
+				if _, ok := palette[row[x]]; !ok && row[x] != '.' {
+					t.Errorf("%s row %d column %d: %q has no colour", d.name, y, x, row[x])
+				}
+			}
+		}
+	}
+}
+
+// Every size is in the resource, so Windows can pick the one that suits
+// Explorer's view and the screen's density.
 func TestTheResourceListsEverySize(t *testing.T) {
 	data, err := os.ReadFile("winres.json")
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, size := range icon.Sizes {
+	for _, size := range Sizes {
 		if !bytes.Contains(data, []byte(`"`+name(size)+`"`)) {
 			t.Errorf("winres.json does not list %s", name(size))
 		}
