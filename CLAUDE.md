@@ -41,15 +41,24 @@ tool, not a deliverable.
 | | |
 | --- | --- |
 | `cmd/gumpet` | the pet, the window, and the process that owns both |
-| `cmd/gumpetctl` | sends a message; opens the settings page |
+| `cmd/gumpet/winres` | the icon compiled into `gumpet.exe`, drawn by hand |
+| `cmd/gumpetctl` | sends a message or a question; opens the settings page; the agents' permission hook |
 | `internal/pet` | drawing, input, the menu, the game loop — imports Ebitengine |
 | `internal/petpack` | uploads artwork to the GPU — imports Ebitengine |
-| `internal/petsrc` | reads artwork off disk, and validates a path without a screen |
-| `internal/roam`, `internal/layout` | where the pet goes and where the window follows |
-| `internal/textwrap`, `internal/gifseq`, `internal/fontfile` | line breaking, GIF frames, finding a font |
+| `assets`, `internal/petsrc` | the bundled artwork; reading artwork off disk, and validating a path without a screen |
+| `internal/icon` | the window's icon and the pages' favicon, made from the pet in use |
+| `internal/roam`, `internal/layout`, `internal/react` | where the pet goes, where the window follows, and how it jumps at news |
+| `internal/drag`, `internal/hover` | moving the pet with the mouse, and holding it still under the cursor |
+| `internal/textwrap`, `internal/richtext` | line breaking, and the links and headings drawn differently within it |
+| `internal/gifseq`, `internal/fontfile` | GIF frames, finding a font |
 | `internal/config`, `internal/settings` | the config file, and the live copy both the pages and the menu write through |
 | `internal/server` | the HTTP API and the two web pages |
 | `internal/history`, `internal/message` | what has been received, and what is on its way |
+| `internal/ask`, `internal/agenthook` | questions put to the pet, and the hook format Claude Code and Codex share |
+| `internal/chatter`, `internal/feed`, `internal/quiet` | what the pet says on its own, the headlines it reads, and when it keeps quiet |
+| `internal/lang` | the language the pet speaks, and its own words in it |
+| `internal/display`, `internal/browser`, `internal/clipboard` | monitors, opening a link, copying a message |
+| `internal/update` | replacing a release with a newer, signed one |
 
 ## Commands
 
