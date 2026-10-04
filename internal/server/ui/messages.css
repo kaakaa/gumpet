@@ -1,0 +1,236 @@
+:root {
+  --shown-bg: #e6f6ec;
+  --shown-ink: #16653a;
+  --waiting-bg: #fdf3e0;
+  --waiting-ink: #8a5a10;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --shown-bg: #16331f;
+    --shown-ink: #8ddba8;
+    --waiting-bg: #3a2f16;
+    --waiting-ink: #e5c07b;
+  }
+}
+
+main { max-width: 760px; margin: 0 auto; padding: 32px 20px 64px; }
+
+header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.summary { color: var(--muted); font-size: 13px; margin: 0 0 16px; }
+
+/* Two lists, one page: what was sent, and what the pet said of its own
+   accord. Tabs rather than one mixed list, because the second is mostly
+   headlines and would bury the first. */
+.tabs { display: flex; gap: 20px; border-bottom: 1px solid var(--line); margin: 0 0 14px; }
+.tabs button {
+  background: none;
+  color: var(--muted);
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  padding: 6px 0;
+  margin-bottom: -1px;
+  font-weight: 600;
+}
+.tabs button[aria-selected=true] { color: var(--ink); border-bottom-color: var(--accent); }
+
+/* How each feed was last read, above what the pet said from them. */
+.feeds { margin: 0 0 18px; }
+.feeds h2 { font-size: 13px; color: var(--muted); margin: 0 0 8px; font-weight: 600; }
+.feed-url {
+  grid-column: 1;
+  font: 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.feeds .failed { color: var(--err-ink); }
+.feeds button {
+  grid-row: 1 / 3;
+  grid-column: 2;
+  align-self: start;
+  background: none;
+  color: var(--accent);
+  border: 1px solid var(--line);
+  padding: 3px 10px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.source {
+  grid-column: 1 / -1;
+  max-height: 360px;
+  overflow: auto;
+  margin: 6px 0 0;
+  padding: 8px 10px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.link {
+  grid-column: 1;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+  color: var(--accent);
+}
+
+.filters {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+.filters input[type=search] {
+  flex: 1 1 260px;
+  min-width: 0;
+  padding: 8px 11px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--card);
+  color: var(--ink);
+  font: inherit;
+}
+.filters select {
+  padding: 8px 11px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--card);
+  color: var(--ink);
+  font: inherit;
+}
+.filters input:focus-visible, .filters select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+mark {
+  background: #ffe9a8;
+  color: inherit;
+  border-radius: 2px;
+  padding: 0 1px;
+}
+@media (prefers-color-scheme: dark) {
+  mark { background: #6b5a1e; color: #ffeec2; }
+}
+
+.note {
+  padding: 10px 13px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  font-size: 13px;
+  background: var(--err-bg);
+  color: var(--err-ink);
+  overflow-wrap: anywhere;
+}
+.inline input {
+  flex: 1;
+  padding: 7px 9px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--ink);
+  font: inherit;
+}
+button {
+  padding: 7px 14px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+button:focus-visible, input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+ul { list-style: none; margin: 0; padding: 0; }
+li {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-bottom: 8px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4px 14px;
+  align-items: start;
+}
+.text {
+  /* Pinned, not left to flow: a remark has no badge, and without one the
+     text would drift into the badge's column. */
+  grid-column: 1;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  margin: 0;
+}
+.when {
+  grid-column: 1;
+  color: var(--muted);
+  font-size: 12px;
+}
+.badge {
+  /* All rows, however many there are: a message with a title has three. */
+  grid-row: 1 / -1;
+  grid-column: 2;
+  align-self: center;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.badge.shown { background: var(--shown-bg); color: var(--shown-ink); }
+.badge.waiting { background: var(--waiting-bg); color: var(--waiting-ink); }
+/* Held during quiet hours: received and kept, and deliberately not said.
+   Grey, because nothing is wrong and nothing is pending. */
+.badge.held { background: var(--line); color: var(--muted); }
+/* A headline the pet had said already: faint, like the balloon draws it,
+   so the new ones are what the eye lands on. */
+.badge.again { background: var(--line); color: var(--muted); }
+/* A question's fate: answered like something said, unanswered like
+   something held, and still waiting like a message in the queue. */
+.badge.answered { background: var(--shown-bg); color: var(--shown-ink); }
+.badge.unanswered { background: var(--line); color: var(--muted); }
+li.seen .text { color: var(--muted); }
+
+/* A message's level is shown as a stripe down its left edge rather than
+   another badge: the badges already say whether the pet has said it, and two
+   badges per row reads as noise. */
+li.level-success { border-left: 3px solid var(--shown-ink); }
+li.level-warn { border-left: 3px solid var(--waiting-ink); }
+li.level-error { border-left: 3px solid var(--err-ink); }
+
+.title {
+  grid-column: 1;
+  margin: 0 0 2px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+li.level-success .title { color: var(--shown-ink); }
+li.level-warn .title { color: var(--waiting-ink); }
+li.level-error .title { color: var(--err-ink); }
+
+.empty {
+  background: var(--card);
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+  padding: 32px 16px;
+  text-align: center;
+  color: var(--muted);
+}

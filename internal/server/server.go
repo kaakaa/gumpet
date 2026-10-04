@@ -13,6 +13,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"path"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -103,6 +104,7 @@ func New(store *settings.Store, hist *history.Store, monitors []display.Monitor,
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{$}", s.page("ui/settings.html"))
 	mux.HandleFunc("GET /messages", s.page("ui/messages.html"))
+	mux.HandleFunc("GET /ui/{file}", s.handleAsset)
 	// .ico too, for a browser that asks for it without reading the pages'
 	// <link>: it takes a PNG there as readily.
 	mux.HandleFunc("GET /favicon.png", s.handleFavicon)
@@ -205,11 +207,43 @@ func (s *Server) page(name string) http.HandlerFunc {
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		// The pages are self-contained, so nothing may be loaded from anywhere
-		// else. img-src is for the favicon, which comes from gumpet itself.
-		w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; img-src 'self'; form-action 'none'")
+		// but gumpet itself: their stylesheets and scripts under /ui/, and the
+		// favicon. No inline script runs at all. Inline style stays allowed for
+		// the odd style attribute in the markup.
+		w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; img-src 'self'; form-action 'none'")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		_, _ = w.Write(body)
 	}
+}
+
+// assetTypes are the files the pages load from /ui/, by extension. The pages
+// themselves are served at their own paths, so HTML is deliberately not here.
+var assetTypes = map[string]string{
+	".css": "text/css; charset=utf-8",
+	".js":  "text/javascript; charset=utf-8",
+}
+
+// handleAsset serves a page's stylesheet or script. They are kept apart from
+// the HTML so that each is a file an editor understands, and so that what the
+// two pages share is written once.
+func (s *Server) handleAsset(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("file")
+	ctype, ok := assetTypes[path.Ext(name)]
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
+	body, err := ui.ReadFile("ui/" + name)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	w.Header().Set("Content-Type", ctype)
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	// Revalidated on every load: after an update, a cached script from the
+	// old version would run against the new page.
+	w.Header().Set("Cache-Control", "no-cache")
+	_, _ = w.Write(body)
 }
 
 // Checking asks GitHub, which can be slow; installing downloads a few tens of

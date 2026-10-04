@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -979,17 +980,81 @@ func TestEveryOfferedPetIsAValidSetting(t *testing.T) {
 // for a pet that needed none, while every check of the hidden property said
 // they were hidden.
 func TestPagesThatHideThingsMakeHiddenStick(t *testing.T) {
-	for _, name := range []string{"ui/settings.html", "ui/messages.html"} {
-		body, err := ui.ReadFile(name)
-		if err != nil {
-			t.Fatal(err)
-		}
-		page := string(body)
+	for _, name := range []string{"settings", "messages"} {
+		page := readUI(t, name+".html") + readUI(t, name+".js")
 		if !strings.Contains(page, " hidden") && !strings.Contains(page, ".hidden") {
 			continue
 		}
-		if !strings.Contains(page, "[hidden] { display: none !important; }") {
-			t.Errorf("%s hides things with the hidden attribute but has no [hidden] rule to make it stick", name)
+		// The rule can be in any stylesheet the page loads.
+		var css string
+		for _, m := range stylesheet.FindAllStringSubmatch(page, -1) {
+			css += readUI(t, m[1])
+		}
+		if !strings.Contains(css, "[hidden] { display: none !important; }") {
+			t.Errorf("%s hides things with the hidden attribute but loads no [hidden] rule to make it stick", name)
+		}
+	}
+}
+
+// stylesheet and script find what a page loads from /ui/.
+var (
+	stylesheet = regexp.MustCompile(`<link rel="stylesheet" href="/ui/([^"]+)">`)
+	script     = regexp.MustCompile(`<script src="/ui/([^"]+)"></script>`)
+)
+
+func readUI(t *testing.T, name string) string {
+	t.Helper()
+	body, err := ui.ReadFile("ui/" + name)
+	if err != nil {
+		t.Fatalf("ui/%s is missing from this build: %v", name, err)
+	}
+	return string(body)
+}
+
+// Every stylesheet and script a page names is served, as what it is. A file
+// missing from the embed, or served as text/plain, leaves the page unstyled or
+// dead, and the browser's nosniff refuses a script with the wrong type.
+func TestThePagesAssetsAreServed(t *testing.T) {
+	s, _, _ := newTestServerWithConfig(t, config.Default(), 1)
+	want := map[string]string{".css": "text/css; charset=utf-8", ".js": "text/javascript; charset=utf-8"}
+	for _, page := range []string{"/", "/messages"} {
+		body := do(t, s, http.MethodGet, page, "", "", nil).Body.String()
+		var assets []string
+		for _, re := range []*regexp.Regexp{stylesheet, script} {
+			for _, m := range re.FindAllStringSubmatch(body, -1) {
+				assets = append(assets, m[1])
+			}
+		}
+		if len(assets) < 3 {
+			t.Fatalf("%s loads %v; want its stylesheets and its script", page, assets)
+		}
+		for _, a := range assets {
+			rec := do(t, s, http.MethodGet, "/ui/"+a, "", "", nil)
+			if rec.Code != http.StatusOK {
+				t.Errorf("%s loads /ui/%s, which answers %d", page, a, rec.Code)
+				continue
+			}
+			if got := rec.Header().Get("Content-Type"); got != want[filepath.Ext(a)] {
+				t.Errorf("/ui/%s is served as %q, want %q", a, got, want[filepath.Ext(a)])
+			}
+		}
+		// With every script in a file, none may run inline.
+		if strings.Contains(body, "<script>") {
+			t.Errorf("%s still has an inline script", page)
+		}
+		if csp := do(t, s, http.MethodGet, page, "", "", nil).Header().Get("Content-Security-Policy"); strings.Contains(csp, "script-src 'self' 'unsafe-inline'") || !strings.Contains(csp, "script-src 'self'") {
+			t.Errorf("%s: Content-Security-Policy %q should allow scripts from gumpet and nowhere else", page, csp)
+		}
+	}
+}
+
+// /ui/ serves stylesheets and scripts and nothing else: not the pages under
+// another name, not a file that is not there.
+func TestUIServesOnlyAssets(t *testing.T) {
+	s, _, _ := newTestServerWithConfig(t, config.Default(), 1)
+	for _, p := range []string{"/ui/settings.html", "/ui/missing.js", "/ui/common", "/ui/..%2fserver.go"} {
+		if rec := do(t, s, http.MethodGet, p, "", "", nil); rec.Code != http.StatusNotFound {
+			t.Errorf("GET %s: status %d, want 404", p, rec.Code)
 		}
 	}
 }

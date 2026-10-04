@@ -1,0 +1,48 @@
+/* Shared by the settings and messages pages. Each page adds its own colours
+   for what only it shows, and its own layout, in a stylesheet of its own. */
+:root {
+  color-scheme: light dark;
+  --bg: #f6f6f4;
+  --card: #ffffff;
+  --ink: #1a1a1a;
+  --muted: #6b6b6b;
+  --line: #dedece;
+  --accent: #00add8;
+  --accent-ink: #ffffff;
+  --err-bg: #fdeaea;
+  --err-ink: #9b1c1c;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #17181a;
+    --card: #202225;
+    --ink: #e8e8e6;
+    --muted: #9a9a97;
+    --line: #34363a;
+    --accent-ink: #06202a;
+    --err-bg: #3a1d1d;
+    --err-ink: #f3a3a3;
+  }
+}
+
+* { box-sizing: border-box; }
+
+/* Anything marked hidden stays hidden, whatever else styles it. Without
+   this, a class that sets display — .row is a grid, .filters a flex box —
+   outranks the browser's own [hidden] rule, and the element shows anyway:
+   an empty "new version" button, a path field for a pet that needs none. */
+[hidden] { display: none !important; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue",
+        "Hiragino Sans", "Yu Gothic UI", Meiryo, sans-serif;
+}
+nav a { color: var(--accent); text-decoration: none; font-weight: 500; }
+nav a:hover { text-decoration: underline; }
+h1 { margin: 0; font-size: 22px; letter-spacing: -0.01em; }
+h1 span { color: var(--muted); font-weight: 400; }
+
+.inline { display: flex; gap: 8px; max-width: 340px; }

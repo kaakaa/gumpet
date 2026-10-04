@@ -32,25 +32,27 @@ var (
 	spaces    = regexp.MustCompile(`\s+`)
 )
 
-func settingsPage(t *testing.T) string {
+// settingsPage returns the settings page's markup and its script, which live
+// in two files.
+func settingsPage(t *testing.T) (markup, script string) {
 	t.Helper()
-	body, err := ui.ReadFile("ui/settings.html")
+	html, err := ui.ReadFile("ui/settings.html")
 	if err != nil {
 		t.Fatalf("the settings page is missing from this build: %v", err)
 	}
-	return string(body)
+	js, err := ui.ReadFile("ui/settings.js")
+	if err != nil {
+		t.Fatalf("the settings page's script is missing from this build: %v", err)
+	}
+	return string(html), string(js)
 }
 
 // split returns the page's markup, its script with the dictionary cut out, and
 // the dictionary on its own. The dictionary is separated because its own keys
 // are string literals too, and a stale entry would otherwise be found by the
 // search meant to prove nothing still says it.
-func split(t *testing.T, page string) (string, string, string) {
+func split(t *testing.T, markup, script string) (string, string, string) {
 	t.Helper()
-	markup, script, ok := strings.Cut(page, "<script>")
-	if !ok {
-		t.Fatal("the settings page has no script")
-	}
 	from := strings.Index(script, "var STRINGS = {")
 	if from < 0 {
 		t.Fatal("the settings page has no STRINGS dictionary")
@@ -120,8 +122,8 @@ func japanese(t *testing.T, dict string) map[string]string {
 // A sentence added to the page without a translation shows up in English for
 // everyone reading in Japanese, and nothing else reports it.
 func TestEveryStringOnTheSettingsPageIsTranslated(t *testing.T) {
-	page := settingsPage(t)
-	markup, script, dict := split(t, page)
+	html, js := settingsPage(t)
+	markup, script, dict := split(t, html, js)
 	ja := japanese(t, dict)
 
 	english := pageEnglish(t, markup, script)
@@ -142,8 +144,8 @@ func TestEveryStringOnTheSettingsPageIsTranslated(t *testing.T) {
 // The other direction: an English sentence reworded in the page leaves its old
 // self in the dictionary, where it does nothing and looks like a translation.
 func TestTheDictionaryHoldsNothingThePageNoLongerSays(t *testing.T) {
-	page := settingsPage(t)
-	markup, script, dict := split(t, page)
+	html, js := settingsPage(t)
+	markup, script, dict := split(t, html, js)
 	ja := japanese(t, dict)
 
 	said := map[string]bool{}
