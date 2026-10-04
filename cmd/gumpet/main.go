@@ -1,6 +1,11 @@
 // Command gumpet runs the desktop pet and the HTTP endpoint that talks to it.
 package main
 
+// The executable's icon on Windows: the PNGs, then the .syso objects the Go
+// toolchain links into a Windows build. See package winres.
+//go:generate go test ./winres -update
+//go:generate go run github.com/tc-hib/go-winres@v0.3.3 make --in winres/winres.json --arch amd64,arm64
+
 import (
 	"context"
 	"flag"
