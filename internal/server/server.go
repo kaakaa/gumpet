@@ -61,6 +61,9 @@ type Server struct {
 	restart  func()
 	updating atomic.Bool
 
+	// favicon is the pages' icon, made from the pet in use.
+	favicon favicon
+
 	server *http.Server
 	// addr is fixed when Serve binds, so that editing server.addr cannot leave
 	// the running listener and the reported address disagreeing.
@@ -100,6 +103,10 @@ func New(store *settings.Store, hist *history.Store, monitors []display.Monitor,
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{$}", s.page("ui/settings.html"))
 	mux.HandleFunc("GET /messages", s.page("ui/messages.html"))
+	// .ico too, for a browser that asks for it without reading the pages'
+	// <link>: it takes a PNG there as readily.
+	mux.HandleFunc("GET /favicon.png", s.handleFavicon)
+	mux.HandleFunc("GET /favicon.ico", s.handleFavicon)
 	mux.HandleFunc("POST /api/v1/messages", s.authed(s.handleMessage))
 	mux.HandleFunc("GET /api/v1/messages", s.authed(s.handleListMessages))
 	mux.HandleFunc("GET /api/v1/config", s.authed(s.handleGetConfig))
@@ -198,8 +205,8 @@ func (s *Server) page(name string) http.HandlerFunc {
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		// The pages are self-contained, so nothing may be loaded from anywhere
-		// else.
-		w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; form-action 'none'")
+		// else. img-src is for the favicon, which comes from gumpet itself.
+		w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; img-src 'self'; form-action 'none'")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		_, _ = w.Write(body)
 	}
