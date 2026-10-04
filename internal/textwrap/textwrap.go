@@ -41,30 +41,10 @@ type Line struct {
 	Width float64
 }
 
-// Text is the line as a plain string, with the styling dropped.
-func (l Line) Text() string {
-	var b strings.Builder
-	for _, r := range l.Runs {
-		b.WriteString(r.Text)
-	}
-	return b.String()
-}
-
-// Wrap breaks s into lines no wider than maxWidth. Explicit line breaks in s
-// are kept, and a rune wider than maxWidth still gets a line of its own rather
-// than looping forever.
-func Wrap(s string, m Measurer, maxWidth float64) []string {
-	lines := WrapSpans([]Span{{Text: s}}, m, maxWidth)
-	out := make([]string, len(lines))
-	for i, l := range lines {
-		out[i] = l.Text()
-	}
-	return out
-}
-
 // WrapSpans breaks styled text into lines no wider than maxWidth, keeping each
-// piece's style with it. A line is broken wherever [Wrap] would break the same
-// text: styling changes nothing about where a break may go.
+// piece's style with it. Explicit line breaks are kept, and a rune wider than
+// maxWidth still gets a line of its own rather than looping forever. Styling
+// changes nothing about where a break may go.
 func WrapSpans(spans []Span, m Measurer, maxWidth float64) []Line {
 	var out []Line
 	for _, para := range paragraphs(spans) {
@@ -79,17 +59,6 @@ func BlockWidth(lines []string, m Measurer) float64 {
 	for _, line := range lines {
 		if w := m.Advance(line); w > widest {
 			widest = w
-		}
-	}
-	return widest
-}
-
-// BlockWidthOf is [BlockWidth] for lines that have already been measured.
-func BlockWidthOf(lines []Line) float64 {
-	widest := 0.0
-	for _, l := range lines {
-		if l.Width > widest {
-			widest = l.Width
 		}
 	}
 	return widest

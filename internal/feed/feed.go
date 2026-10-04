@@ -318,16 +318,10 @@ func NewFetcher() *Fetcher {
 	return &Fetcher{Client: &http.Client{Timeout: Timeout}}
 }
 
-// Fetch reads the feed at url. It refuses anything but http and https before
-// making a request at all, so a config file cannot turn this into a way of
-// reading local files.
-func (f *Fetcher) Fetch(ctx context.Context, url string) ([]Item, error) {
-	items, _, _, err := f.fetch(ctx, url)
-	return items, err
-}
-
-// fetch is [Fetcher.Fetch], also returning what the server said and sent, for
-// the report. The body is returned even when it would not parse: that is the
+// fetch reads the feed at url, also returning what the server said and sent,
+// for the report. It refuses anything but http and https before making a
+// request at all, so a config file cannot turn this into a way of reading
+// local files. The body is returned even when it would not parse: that is the
 // case where someone most wants to see it.
 func (f *Fetcher) fetch(ctx context.Context, url string) (items []Item, status string, body []byte, err error) {
 	if !Openable(url) {
