@@ -120,6 +120,16 @@ func PlaceWindow(petX, petY, petW, petH float64, panel Panel, gap float64, monit
 	return win
 }
 
+// Drifted reports whether a window the system reports at got has moved or
+// changed size from want, where it was last put. A pixel either way is not
+// drift: on a display scaled by 125% or 150% the system rounds the size and
+// position it hands back, and treating that as a change would have the window
+// put back every time it was checked.
+func Drifted(want, got Rect) bool {
+	off := func(a, b float64) bool { return math.Abs(a-b) > 1 }
+	return off(want.X, got.X) || off(want.Y, got.Y) || off(want.W, got.W) || off(want.H, got.H)
+}
+
 // Clamp keeps v within [lo, hi]. When the range is empty — a panel wider than
 // the monitor, say — lo wins, which keeps the left and top edges on screen.
 func Clamp(v, lo, hi float64) float64 {
