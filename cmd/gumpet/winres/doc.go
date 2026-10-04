@@ -7,7 +7,7 @@
 // Windows' blank placeholder. Ebitengine's GLFW port does not read a GLFW_ICON
 // resource either, so nothing would fill that gap.
 //
-// The executable's icon is gumpet's own: a mailbox with its flag up, drawn in
+// The executable's icon is gumpet's own: a red mailbox with a letter, drawn in
 // mailbox.go. The PNGs here are generated from that drawing, and the .syso
 // files beside cmd/gumpet's main.go are built from the PNGs; regenerate both
 // with
