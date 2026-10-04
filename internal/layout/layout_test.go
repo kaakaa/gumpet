@@ -395,3 +395,26 @@ func TestButtonsSitSideBySideWithoutOverlapping(t *testing.T) {
 		t.Error("no labels should make no buttons and no width")
 	}
 }
+
+// The window is only put back when the system has really moved or resized it:
+// rounding on a scaled display must not count, a shrunken window must.
+func TestDrifted(t *testing.T) {
+	want := Rect{X: 900, Y: 600, W: 320, H: 280}
+	cases := []struct {
+		name string
+		got  Rect
+		want bool
+	}{
+		{"exactly where it was put", want, false},
+		{"a pixel off from rounding", Rect{X: 901, Y: 599, W: 321, H: 279}, false},
+		{"shrunk by the system", Rect{X: 900, Y: 600, W: 120, H: 90}, true},
+		{"grown by the system", Rect{X: 900, Y: 600, W: 320, H: 400}, true},
+		{"moved by the system", Rect{X: 0, Y: 0, W: 320, H: 280}, true},
+		{"two pixels off is no longer rounding", Rect{X: 902, Y: 600, W: 320, H: 280}, true},
+	}
+	for _, c := range cases {
+		if got := Drifted(want, c.got); got != c.want {
+			t.Errorf("%s: Drifted(%v, %v) = %v, want %v", c.name, want, c.got, got, c.want)
+		}
+	}
+}

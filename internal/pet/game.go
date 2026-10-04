@@ -118,6 +118,14 @@ type Game struct {
 	// that it is only actually moved and resized when something changed.
 	winW, winH int
 	winX, winY int
+	// sinceWindowCheck counts towards the next look at where the window really
+	// is, and drifted says the last look found it somewhere else, so that a
+	// window the system keeps resizing is reported once rather than every
+	// second. See checkWindow.
+	sinceWindowCheck time.Duration
+	drifted          bool
+	// windowSet says placeWindow asked for a new size or position this tick.
+	windowSet bool
 	// passthrough is the last value handed to Ebitengine, which is not always
 	// the configured one: a hidden pet must not swallow clicks.
 	passthrough bool
@@ -296,6 +304,7 @@ func (g *Game) Update() error {
 	g.advanceReaction(dt)
 	g.rebuildPanel()
 	g.placeWindow()
+	g.checkWindow(dt)
 	return nil
 }
 
@@ -1062,6 +1071,56 @@ func (g *Game) activePanel() layout.Panel {
 	}
 }
 
+// windowCheckEvery is how often the window's real size and position are
+// compared with what gumpet asked for. Asking the system costs a round trip to
+// the main thread, and a window that was knocked out of place a second ago is
+// not yet a problem anyone has noticed.
+const windowCheckEvery = time.Second
+
+// checkWindow puts the window back if something other than gumpet resized or
+// moved it.
+//
+// placeWindow only tells the system about changes it made itself, comparing
+// with what it last asked for. A window the system shrank or moved on its own
+// — waking a display, a change of resolution or scale, a remote session —
+// would stay that way for good: the pet and its balloons are still laid out
+// for the full window, so only the top-left corner of a balloon shows, the pet
+// is outside the window, and there is nothing left to click.
+func (g *Game) checkWindow(dt time.Duration) {
+	g.sinceWindowCheck += dt
+	set := g.windowSet
+	g.windowSet = false
+	// A size or position asked for this tick has not reached the window yet,
+	// and would read as drift. The check waits for a tick that left the window
+	// alone, which while the pet walks is a few ticks away, and while it is
+	// being dragged is when the drag ends.
+	if g.sinceWindowCheck < windowCheckEvery || set {
+		return
+	}
+	g.sinceWindowCheck = 0
+	// Nothing placed yet, or mid-move to another monitor, where positions are
+	// read against the wrong one; and a minimised window is meant to be small.
+	if g.winW == 0 || g.winH == 0 || !g.onWantedMonitor() || ebiten.IsWindowMinimized() {
+		return
+	}
+	gx, gy := ebiten.WindowPosition()
+	gw, gh := ebiten.WindowSize()
+	want := layout.Rect{X: float64(g.winX), Y: float64(g.winY), W: float64(g.winW), H: float64(g.winH)}
+	got := layout.Rect{X: float64(gx), Y: float64(gy), W: float64(gw), H: float64(gh)}
+	if !layout.Drifted(want, got) {
+		g.drifted = false
+		return
+	}
+	if !g.drifted {
+		g.log.Warn("window was moved or resized from outside; putting it back",
+			"want", fmt.Sprintf("%dx%d at %d,%d", g.winW, g.winH, g.winX, g.winY),
+			"got", fmt.Sprintf("%dx%d at %d,%d", gw, gh, gx, gy))
+		g.drifted = true
+	}
+	ebiten.SetWindowSize(g.winW, g.winH)
+	ebiten.SetWindowPosition(g.winX, g.winY)
+}
+
 // placeWindow sizes the window around the pet and its panel and moves it to
 // wherever the pet has walked to.
 func (g *Game) placeWindow() {
@@ -1094,11 +1153,13 @@ func (g *Game) placeWindow() {
 	if w != g.winW || h != g.winH {
 		ebiten.SetWindowSize(w, h)
 		g.winW, g.winH = w, h
+		g.windowSet = true
 	}
 	x, y := int(math.Round(g.win.X)), int(math.Round(g.win.Y))
 	if x != g.winX || y != g.winY {
 		ebiten.SetWindowPosition(x, y)
 		g.winX, g.winY = x, y
+		g.windowSet = true
 	}
 
 	// An invisible pet must not swallow clicks, whatever the setting says.
